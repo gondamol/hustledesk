@@ -9,15 +9,17 @@ import {
   Copy,
   Bell,
   Banknote,
+  Mail,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { daysOverdue, formatDate, formatMoney, invoiceTotals, todayISO } from '../lib/format';
 import { downloadInvoicePdf } from '../lib/pdf';
 import { StatusBadge } from '../components/StatusBadge';
-import { buildSharePayload, copyToClipboard, encodeShare, shareUrl } from '../lib/share';
+import { copyToClipboard } from '../lib/share';
+import { createShareLink, sendInvoiceEmail } from '../lib/cloudApi';
 
 export function InvoiceView() {
-  const { data, nav, go, recordPayment, duplicateInvoice, canCreateInvoice } = useApp();
+  const { data, nav, go, recordPayment, duplicateInvoice, canCreateInvoice, cloudUser } = useApp();
   const invoice = data.invoices.find((i) => i.id === nav.invoiceId);
   const client = invoice ? data.clients.find((c) => c.id === invoice.clientId) : undefined;
   const business = data.business;
@@ -33,6 +35,8 @@ export function InvoiceView() {
     receipt: true,
   });
   const [shareMsg, setShareMsg] = useState('');
+  const [emailStatus, setEmailStatus] = useState('');
+  const [emailLoading, setEmailLoading] = useState(false);
 
   if (!invoice) {
     return (
@@ -83,13 +87,64 @@ export function InvoiceView() {
   };
 
   const shareLink = async () => {
-    const token = encodeShare(
-      buildSharePayload('invoice', business, client, { invoice }),
-    );
-    const url = shareUrl(token);
-    await copyToClipboard(url);
-    setShareMsg(url);
-    alert('Shareable link copied to clipboard!\n\nAnyone with the link can view this invoice (no login).');
+    try {
+      const { url, mode } = await createShareLink({
+        kind: 'invoice',
+        business,
+        client,
+        invoice,
+        userId: cloudUser?.id,
+      });
+      await copyToClipboard(url);
+      setShareMsg(url);
+      alert(
+        mode === 'cloud'
+          ? 'Short share link copied! Anyone can open it (no login).'
+          : 'Share link copied (local long-link mode). Enable Supabase for short /s/xxx URLs.',
+      );
+      return url;
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Could not create share link');
+      return '';
+    }
+  };
+
+  const emailInvoice = async () => {
+    if (!client?.email) {
+      alert('Add a client email first (Clients).');
+      return;
+    }
+    setEmailLoading(true);
+    setEmailStatus('');
+    try {
+      const { url } = await createShareLink({
+        kind: 'invoice',
+        business,
+        client,
+        invoice,
+        userId: cloudUser?.id,
+      });
+      await sendInvoiceEmail({
+        to: client.email,
+        businessName: business.name,
+        clientName: client.name,
+        invoiceNumber: invoice.number,
+        total: formatMoney(totals.total, currency),
+        balance: formatMoney(balance, currency),
+        dueDate: formatDate(invoice.dueDate),
+        shareUrl: url,
+        mpesaTill: business.mpesaTill,
+        mpesaPaybill: business.mpesaPaybill,
+        notes: invoice.notes,
+        replyTo: business.email,
+        userId: cloudUser?.id,
+      });
+      setEmailStatus(`Invoice emailed to ${client.email}`);
+    } catch (e) {
+      setEmailStatus(e instanceof Error ? e.message : 'Email failed');
+    } finally {
+      setEmailLoading(false);
+    }
   };
 
   const shareWhatsApp = (reminder = false) => {
@@ -153,6 +208,9 @@ export function InvoiceView() {
           <button type="button" className="btn btn-secondary" onClick={shareLink}>
             <Link2 size={16} /> Share link
           </button>
+          <button type="button" className="btn btn-secondary" onClick={emailInvoice} disabled={emailLoading}>
+            <Mail size={16} /> {emailLoading ? 'Sending…' : 'Email'}
+          </button>
           <button type="button" className="btn btn-secondary" onClick={() => shareWhatsApp(false)}>
             <MessageCircle size={16} /> WhatsApp
           </button>
@@ -183,6 +241,11 @@ export function InvoiceView() {
         <div className="alert alert-info no-print">
           Share link ready (also in clipboard):
           <div style={{ wordBreak: 'break-all', fontSize: '0.85rem', marginTop: 6 }}>{shareMsg}</div>
+        </div>
+      )}
+      {emailStatus && (
+        <div className={`alert ${emailStatus.includes('emailed') ? 'alert-info' : 'alert-warn'} no-print`}>
+          {emailStatus}
         </div>
       )}
 

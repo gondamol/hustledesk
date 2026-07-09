@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -30,8 +31,22 @@ import {
   persistWorkspace,
   resetDemo,
   getSessionEmail,
+  defaultBusiness,
 } from '../lib/storage';
 import { addDaysISO, invoiceTotals, todayISO, uid } from '../lib/format';
+import { isCloudEnabled } from '../lib/config';
+import {
+  cloudGetSession,
+  cloudGetSubscription,
+  cloudGetUser,
+  cloudLoadWorkspace,
+  cloudSaveWorkspace,
+  cloudSignIn,
+  cloudSignOut,
+  cloudSignUp,
+  getSupabase,
+} from '../lib/supabase';
+import type { User } from '@supabase/supabase-js';
 
 interface NavState {
   page: Page;
@@ -43,6 +58,10 @@ interface NavState {
 interface AppContextValue {
   data: AppData;
   nav: NavState;
+  cloudUser: User | null;
+  cloudMode: boolean;
+  cloudSyncing: boolean;
+  cloudReady: boolean;
   go: (page: Page, id?: string) => void;
   updateBusiness: (patch: Partial<BusinessProfile>) => void;
   addClient: (client: Omit<Client, 'id' | 'createdAt'>) => Client;
@@ -75,9 +94,10 @@ interface AppContextValue {
     email: string;
     password: string;
     phone: string;
-  }) => { ok: boolean; error?: string };
-  login: (email: string, password: string) => { ok: boolean; error?: string };
-  logout: () => void;
+  }) => Promise<{ ok: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  logout: () => Promise<void>;
+  refreshSubscription: () => Promise<void>;
   stats: {
     outstanding: number;
     paidThisMonth: number;
@@ -100,16 +120,126 @@ const AppContext = createContext<AppContextValue | null>(null);
 const FREE_INVOICE_LIMIT = 8;
 const FREE_QUOTE_LIMIT = 8;
 
+function emptyWorkspace(partial?: Partial<BusinessProfile>): AppData {
+  return {
+    business: { ...defaultBusiness(), ...partial },
+    clients: [],
+    invoices: [],
+    quotes: [],
+    catalog: [],
+    expenses: [],
+    receipts: [],
+    session: { loggedIn: true },
+  };
+}
+
+function normalizeLoaded(raw: AppData): AppData {
+  return {
+    ...raw,
+    catalog: raw.catalog || [],
+    expenses: raw.expenses || [],
+    receipts: raw.receipts || [],
+    invoices: (raw.invoices || []).map((i) => ({ ...i, payments: i.payments || [] })),
+    session: { loggedIn: true },
+  };
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(() => loadData());
   const [nav, setNav] = useState<NavState>({ page: 'landing' });
+  const [cloudUser, setCloudUser] = useState<User | null>(null);
+  const [cloudSyncing, setCloudSyncing] = useState(false);
+  const [cloudReady, setCloudReady] = useState(!isCloudEnabled());
+  const skipNextPersist = useRef(false);
+  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const cloudMode = isCloudEnabled();
+
+  // Restore cloud session on boot
+  useEffect(() => {
+    if (!cloudMode) {
+      setCloudReady(true);
+      return;
+    }
+    let unsub: (() => void) | undefined;
+    (async () => {
+      try {
+        const session = await cloudGetSession();
+        if (session?.user) {
+          setCloudUser(session.user);
+          const remote = await cloudLoadWorkspace(session.user.id);
+          if (remote) {
+            skipNextPersist.current = true;
+            setData(normalizeLoaded(remote));
+          } else {
+            // first cloud login: keep local empty structure with email
+            setData((d) =>
+              normalizeLoaded({
+                ...d,
+                business: {
+                  ...d.business,
+                  accountEmail: session.user.email || d.business.accountEmail,
+                  email: session.user.email || d.business.email,
+                },
+                session: { loggedIn: true },
+              }),
+            );
+          }
+          const sub = await cloudGetSubscription(session.user.id);
+          if (sub?.plan === 'pro' && sub.status === 'active') {
+            setData((d) => ({ ...d, business: { ...d.business, plan: 'pro' } }));
+          }
+        }
+        const sb = getSupabase();
+        if (sb) {
+          const { data: subData } = sb.auth.onAuthStateChange(async (event, sess) => {
+            if (event === 'SIGNED_OUT') {
+              setCloudUser(null);
+            } else if (sess?.user) {
+              setCloudUser(sess.user);
+            }
+          });
+          unsub = () => subData.subscription.unsubscribe();
+        }
+      } catch (e) {
+        console.warn('Cloud boot failed', e);
+      } finally {
+        setCloudReady(true);
+      }
+    })();
+    return () => unsub?.();
+  }, [cloudMode]);
+
+  // Local multi-account persist
   useEffect(() => {
     const email = getSessionEmail() || data.business.accountEmail;
-    if (email && data.session.loggedIn) {
+    if (email && data.session.loggedIn && !cloudUser) {
       persistWorkspace(email, data);
     }
-  }, [data]);
+  }, [data, cloudUser]);
+
+  // Cloud debounced sync
+  useEffect(() => {
+    if (!cloudUser || !data.session.loggedIn) return;
+    if (skipNextPersist.current) {
+      skipNextPersist.current = false;
+      return;
+    }
+    if (syncTimer.current) clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(async () => {
+      try {
+        setCloudSyncing(true);
+        await cloudSaveWorkspace(cloudUser.id, data);
+      } catch (e) {
+        console.warn('Cloud sync failed', e);
+      } finally {
+        setCloudSyncing(false);
+      }
+    }, 900);
+    return () => {
+      if (syncTimer.current) clearTimeout(syncTimer.current);
+    };
+  }, [data, cloudUser]);
 
   const go = useCallback((page: Page, id?: string) => {
     if (page.startsWith('quote')) setNav({ page, quoteId: id });
@@ -152,10 +282,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           },
         };
       }
-      return {
-        ...d,
-        invoices: d.invoices.map((i) => (i.id === invoice.id ? invoice : i)),
-      };
+      return { ...d, invoices: d.invoices.map((i) => (i.id === invoice.id ? invoice : i)) };
     });
   }, []);
 
@@ -387,13 +514,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!parsed.business || !Array.isArray(parsed.invoices)) {
         return { ok: false, error: 'Invalid backup file.' };
       }
-      setData({
-        ...parsed,
-        catalog: parsed.catalog || [],
-        expenses: parsed.expenses || [],
-        receipts: parsed.receipts || [],
-        session: { loggedIn: true },
-      });
+      setData(normalizeLoaded({ ...parsed, session: { loggedIn: true } }));
       return { ok: true };
     } catch {
       return { ok: false, error: 'Could not parse JSON backup.' };
@@ -406,13 +527,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const signup = useCallback(
-    (payload: {
+    async (payload: {
       businessName: string;
       owner: string;
       email: string;
       password: string;
       phone: string;
     }) => {
+      if (cloudMode) {
+        try {
+          const result = await cloudSignUp(payload.email, payload.password, {
+            businessName: payload.businessName,
+            owner: payload.owner,
+            phone: payload.phone,
+          });
+          const user = result.user;
+          if (!user) {
+            return {
+              ok: true,
+              error: undefined,
+            };
+          }
+          // email confirmation may be required
+          if (!result.session) {
+            return {
+              ok: true,
+              error: 'Account created. Check your email to confirm, then log in.',
+            };
+          }
+          setCloudUser(user);
+          const ws = emptyWorkspace({
+            name: payload.businessName.trim(),
+            owner: payload.owner.trim(),
+            phone: payload.phone.trim(),
+            email: payload.email.trim().toLowerCase(),
+            accountEmail: payload.email.trim().toLowerCase(),
+            onboardingDone: true,
+          });
+          setData(ws);
+          await cloudSaveWorkspace(user.id, ws);
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, error: e instanceof Error ? e.message : 'Signup failed' };
+        }
+      }
+
       const res = createAccount(payload.email, payload.password, {
         name: payload.businessName.trim(),
         owner: payload.owner.trim(),
@@ -422,23 +581,73 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setData(res.data);
       return { ok: true };
     },
-    [],
+    [cloudMode],
   );
 
-  const login = useCallback((email: string, password: string) => {
-    const res = loginAccount(email, password);
-    if (!res.ok) return { ok: false, error: res.error };
-    setData(res.data);
-    return { ok: true };
-  }, []);
+  const login = useCallback(
+    async (email: string, password: string) => {
+      if (cloudMode) {
+        try {
+          const result = await cloudSignIn(email, password);
+          const user = result.user;
+          setCloudUser(user);
+          const remote = await cloudLoadWorkspace(user.id);
+          if (remote) {
+            skipNextPersist.current = true;
+            let next = normalizeLoaded(remote);
+            const sub = await cloudGetSubscription(user.id);
+            if (sub?.plan === 'pro' && sub.status === 'active') {
+              next = { ...next, business: { ...next.business, plan: 'pro' } };
+            }
+            setData(next);
+          } else {
+            setData(
+              emptyWorkspace({
+                email: user.email || email,
+                accountEmail: user.email || email,
+                onboardingDone: true,
+              }),
+            );
+          }
+          return { ok: true };
+        } catch (e) {
+          // fall back to local if cloud fails and local demo exists
+          const local = loginAccount(email, password);
+          if (local.ok) {
+            setData(local.data);
+            return { ok: true };
+          }
+          return { ok: false, error: e instanceof Error ? e.message : 'Login failed' };
+        }
+      }
 
-  const logout = useCallback(() => {
+      const res = loginAccount(email, password);
+      if (!res.ok) return { ok: false, error: res.error };
+      setData(res.data);
+      return { ok: true };
+    },
+    [cloudMode],
+  );
+
+  const logout = useCallback(async () => {
+    if (cloudMode) await cloudSignOut();
     logoutAccount();
-    setData((d) => ({ ...emptyLoggedOut(d), session: { loggedIn: false } }));
+    setCloudUser(null);
+    setData((d) => ({ ...d, session: { loggedIn: false } }));
     setNav({ page: 'landing' });
-  }, []);
+  }, [cloudMode]);
+
+  const refreshSubscription = useCallback(async () => {
+    const user = cloudUser || (await cloudGetUser());
+    if (!user) return;
+    const sub = await cloudGetSubscription(user.id);
+    if (sub?.plan === 'pro' && sub.status === 'active') {
+      setData((d) => ({ ...d, business: { ...d.business, plan: 'pro' } }));
+    }
+  }, [cloudUser]);
 
   const resetDemoData = useCallback(() => {
+    setCloudUser(null);
     setData(resetDemo());
     setNav({ page: 'dashboard' });
   }, []);
@@ -502,6 +711,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value: AppContextValue = {
     data,
     nav,
+    cloudUser,
+    cloudMode,
+    cloudSyncing,
+    cloudReady,
     go,
     updateBusiness,
     addClient,
@@ -527,6 +740,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     signup,
     login,
     logout,
+    refreshSubscription,
     stats,
     freeInvoiceLimit: FREE_INVOICE_LIMIT,
     freeQuoteLimit: FREE_QUOTE_LIMIT,
@@ -536,13 +750,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
-}
-
-function emptyLoggedOut(d: AppData): AppData {
-  return {
-    ...d,
-    session: { loggedIn: false },
-  };
 }
 
 export function useApp() {

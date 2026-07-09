@@ -4,10 +4,11 @@ import { useApp } from '../context/AppContext';
 import { formatDate, formatMoney, invoiceTotals } from '../lib/format';
 import { downloadQuotePdf } from '../lib/pdf';
 import { QuoteStatusBadge } from '../components/StatusBadge';
-import { buildSharePayload, copyToClipboard, encodeShare, shareUrl } from '../lib/share';
+import { copyToClipboard } from '../lib/share';
+import { createShareLink } from '../lib/cloudApi';
 
 export function QuoteView() {
-  const { data, nav, go, convertQuoteToInvoice, canCreateInvoice } = useApp();
+  const { data, nav, go, convertQuoteToInvoice, canCreateInvoice, cloudUser } = useApp();
   const quote = data.quotes.find((q) => q.id === nav.quoteId);
   const client = quote ? data.clients.find((c) => c.id === quote.clientId) : undefined;
   const business = data.business;
@@ -44,11 +45,16 @@ export function QuoteView() {
   };
 
   const shareLink = async () => {
-    const token = encodeShare(buildSharePayload('quote', business, client, { quote }));
-    const url = shareUrl(token);
+    const { url, mode } = await createShareLink({
+      kind: 'quote',
+      business,
+      client,
+      quote,
+      userId: cloudUser?.id,
+    });
     await copyToClipboard(url);
     setShareMsg(url);
-    alert('Quotation share link copied!');
+    alert(mode === 'cloud' ? 'Short quote link copied!' : 'Quote link copied (local mode).');
   };
 
   const shareWhatsApp = () => {

@@ -18,6 +18,7 @@ import { Expenses } from './pages/Expenses';
 import { Reports } from './pages/Reports';
 import { Receipts } from './pages/Receipts';
 import { SharePublic } from './pages/SharePublic';
+import { ShortShare } from './pages/ShortShare';
 import type { Page } from './types';
 
 const APP_PAGES: Page[] = [
@@ -127,6 +128,7 @@ export default function App() {
     <BrowserRouter>
       <AppProvider>
         <Routes>
+          <Route path="/s/:id" element={<ShortShare />} />
           <Route path="/share/:token" element={<SharePublic />} />
           <Route path="/*" element={<AppShell />} />
           <Route path="*" element={<Navigate to="/" replace />} />

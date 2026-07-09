@@ -1,20 +1,24 @@
 import { useApp } from '../context/AppContext';
 import { formatDate, formatMoney } from '../lib/format';
-import { buildSharePayload, copyToClipboard, encodeShare, shareUrl } from '../lib/share';
+import { copyToClipboard } from '../lib/share';
+import { createShareLink } from '../lib/cloudApi';
 import { Link2, Trash2 } from 'lucide-react';
 
 export function Receipts() {
-  const { data, deleteReceipt } = useApp();
+  const { data, deleteReceipt, cloudUser } = useApp();
   const currency = data.business.currency;
 
   const share = async (receiptId: string) => {
     const r = data.receipts.find((x) => x.id === receiptId);
     if (!r) return;
     const client = data.clients.find((c) => c.id === r.clientId);
-    const token = encodeShare(
-      buildSharePayload('receipt', data.business, client, { receipt: r }),
-    );
-    const url = shareUrl(token);
+    const { url } = await createShareLink({
+      kind: 'receipt',
+      business: data.business,
+      client,
+      receipt: r,
+      userId: cloudUser?.id,
+    });
     await copyToClipboard(url);
     alert('Receipt share link copied!\n\n' + url.slice(0, 80) + '…');
   };

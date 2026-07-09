@@ -1,57 +1,66 @@
 # HustleDesk
 
 **Kenya-first money desk for SMEs & freelancers**  
-Quotes → invoices → share links → M-Pesa → receipts → reports.
+Quotes → invoices → short share links → M-Pesa → receipts → email → reports.
 
-Live: **https://hustledesk-khaki.vercel.app**  
-Repo: **https://github.com/gondamol/hustledesk**
+| | |
+|--|--|
+| **Live** | https://hustledesk-khaki.vercel.app |
+| **GitHub** | https://github.com/gondamol/hustledesk |
+| **Cloud setup** | [docs/CLOUD_SETUP.md](docs/CLOUD_SETUP.md) |
 
-## Demo
+## Features
+
+### Product
+- Business accounts, logo, brand colour
+- Itemized quotes & invoices (qty × unit price) + product catalog
+- Convert quote → invoice
+- Partial payments, payment history, receipts
+- Expenses + profit dashboard
+- CSV exports + JSON backup
+- WhatsApp send + payment reminders
+
+### Cloud infrastructure (configure env)
+1. **Supabase auth + multi-device workspace sync**
+2. **Short share URLs** `/s/abc123` (stored in Supabase)
+3. **M-Pesa Daraja STK** for Pro billing (KSh 799)
+4. **Email invoices** via Resend
+
+Without keys, the app still works in **local mode** (demo login, long share tokens, demo Pro unlock).
+
+## Demo (local mode)
 
 - Email: `demo@hustledesk.ke`
 - Password: `demo123`
-
-## Features that set us apart
-
-| Feature | Why it matters |
-|--------|----------------|
-| **Public share links** | Client opens invoice/quote in browser — no app install |
-| **Multi-business accounts** | Isolated workspaces per email on this device |
-| **Logo + brand colour** | Look legit on every PDF & share page |
-| **Itemized lines + catalog** | Qty × unit price; reuse services |
-| **Quotes → invoice** | HoneyBook-style conversion |
-| **Partial payments + receipts** | Track M-Pesa references; issue receipts |
-| **WhatsApp send + reminders** | Chase overdue politely |
-| **Expenses + profit** | Money in vs money out |
-| **CSV + JSON backup** | Accountants + disaster recovery |
-| **Reports** | VAT approx + client balances |
-| **M-Pesa / bank / KRA PIN** | Local rails, not US-only cards |
 
 ## Quick start
 
 ```bash
 npm install
+cp .env.example .env   # optional cloud keys
 npm run dev
+```
+
+## API health
+
+```bash
+curl https://hustledesk-khaki.vercel.app/api/health
 ```
 
 ## Deploy
 
-Pushes to `master` deploy on Vercel. Manual:
-
 ```bash
-npm run build
+git push origin master   # auto-deploys if Vercel linked
+# or
 vercel --prod
 ```
 
-Custom domain: see [docs/CUSTOM_DOMAIN.md](docs/CUSTOM_DOMAIN.md)  
-Roadmap: see [docs/ROADMAP.md](docs/ROADMAP.md)
+Set env vars in Vercel (see `.env.example` and `docs/CLOUD_SETUP.md`).
 
-## Cloud auth (honest status)
+## Custom domain
 
-**Now:** multi-account email/password workspaces stored in the browser (like a strong offline Wave prototype). Share links work **globally** without login.
+See [docs/CUSTOM_DOMAIN.md](docs/CUSTOM_DOMAIN.md).
 
-**Next:** Supabase Auth + Postgres for true multi-device cloud (phone + laptop). Documented in roadmap.
+## Roadmap
 
-## License
-
-Build your business. Keep a commercial hosted version.
+See [docs/ROADMAP.md](docs/ROADMAP.md).

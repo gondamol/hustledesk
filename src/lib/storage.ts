@@ -20,7 +20,8 @@ export interface AccountRecord {
   data: AppData;
 }
 
-export const defaultBusiness = (): BusinessProfile => ({
+export function defaultBusiness(): BusinessProfile {
+  return {
   name: '',
   owner: '',
   email: '',
@@ -50,7 +51,8 @@ export const defaultBusiness = (): BusinessProfile => ({
   onboardingDone: false,
   brandColor: '#0f766e',
   paymentTerms: 'Payment due within 7 days of invoice date.',
-});
+  };
+}
 
 function ensureInvoice(inv: Invoice): Invoice {
   return {

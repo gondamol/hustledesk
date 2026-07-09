@@ -34,7 +34,7 @@ function isActive(current: Page, page: Page) {
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const { nav, go, data, logout } = useApp();
+  const { nav, go, data, logout, cloudMode, cloudSyncing, cloudUser } = useApp();
 
   const NavButtons = ({ mobile = false }: { mobile?: boolean }) => (
     <>
@@ -74,6 +74,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {data.business.name || 'Your business'}
             <br />
             Plan: <strong>{data.business.plan === 'pro' ? 'Pro' : 'Free'}</strong>
+            <br />
+            {cloudMode ? (
+              <span style={{ opacity: 0.85 }}>
+                Cloud {cloudUser ? (cloudSyncing ? '· syncing…' : '· synced') : '· signed out'}
+              </span>
+            ) : (
+              <span style={{ opacity: 0.75 }}>Local mode</span>
+            )}
           </div>
         </>
       )}
