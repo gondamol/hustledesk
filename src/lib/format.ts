@@ -54,7 +54,14 @@ export function lineAmount(qty: number, unitPrice: number): number {
   return (Number(qty) || 0) * (Number(unitPrice) || 0);
 }
 
-/** Compress image file to data URL for logo storage */
+export function daysOverdue(dueDate: string): number {
+  const due = new Date(dueDate);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+  return Math.floor((now.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
+}
+
 export function fileToLogoDataUrl(file: File, maxPx = 400): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

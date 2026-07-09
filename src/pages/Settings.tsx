@@ -1,11 +1,18 @@
 import { useState } from 'react';
-import { Save, RotateCcw, Trash2, ImagePlus } from 'lucide-react';
+import { Save, RotateCcw, ImagePlus, Download, Upload } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { fileToLogoDataUrl } from '../lib/format';
+import { fileToLogoDataUrl, todayISO } from '../lib/format';
+import {
+  clientsToCsv,
+  downloadCsv,
+  expensesToCsv,
+  invoicesToCsv,
+  quotesToCsv,
+} from '../lib/csv';
 import type { BusinessProfile } from '../types';
 
 export function Settings() {
-  const { data, updateBusiness, resetDemo, wipeData } = useApp();
+  const { data, updateBusiness, resetDemoData, exportBackup, importBackup } = useApp();
   const [form, setForm] = useState<BusinessProfile>(data.business);
   const [saved, setSaved] = useState(false);
   const [logoError, setLogoError] = useState('');
@@ -39,12 +46,14 @@ export function Settings() {
     }
   };
 
+  const currency = data.business.currency;
+
   return (
     <div>
       <div className="page-header">
         <div>
           <h1>Business settings</h1>
-          <p>Your brand, logo, M-Pesa, and KRA details appear on every quote and invoice.</p>
+          <p>Brand, payments, account, backup — your SME control centre.</p>
         </div>
         <button type="button" className="btn btn-primary" onClick={save}>
           <Save size={16} /> Save settings
@@ -54,8 +63,7 @@ export function Settings() {
       {saved && <div className="alert alert-info">Settings saved.</div>}
 
       <div className="card" style={{ marginBottom: '1rem' }}>
-        <h3>Business logo</h3>
-        <p className="muted">Like FreshBooks / Wave — your logo builds trust on PDFs clients receive.</p>
+        <h3>Business logo & brand</h3>
         <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center', flexWrap: 'wrap', marginTop: '0.75rem' }}>
           <div
             style={{
@@ -76,18 +84,36 @@ export function Settings() {
             )}
           </div>
           <div>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => onLogo(e.target.files?.[0] || null)}
-            />
-            <p className="help">PNG or JPG recommended. Square logos work best.</p>
+            <input type="file" accept="image/*" onChange={(e) => onLogo(e.target.files?.[0] || null)} />
+            <p className="help">Shown on invoices, quotes, PDFs, and public share links.</p>
             {form.logoDataUrl && (
               <button type="button" className="btn btn-sm btn-danger" onClick={() => set('logoDataUrl', '')}>
                 Remove logo
               </button>
             )}
-            {logoError && <div className="alert alert-warn" style={{ marginTop: 8 }}>{logoError}</div>}
+            {logoError && (
+              <div className="alert alert-warn" style={{ marginTop: 8 }}>
+                {logoError}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="form-grid" style={{ marginTop: '1rem' }}>
+          <div className="field">
+            <label>Brand colour</label>
+            <input
+              type="color"
+              value={form.brandColor || '#0f766e'}
+              onChange={(e) => set('brandColor', e.target.value)}
+            />
+          </div>
+          <div className="field full">
+            <label>Default payment terms</label>
+            <input
+              value={form.paymentTerms || ''}
+              onChange={(e) => set('paymentTerms', e.target.value)}
+              placeholder="Payment due within 7 days…"
+            />
           </div>
         </div>
       </div>
@@ -121,12 +147,15 @@ export function Settings() {
           </div>
           <div className="field">
             <label>KRA PIN</label>
-            <input value={form.kraPin} onChange={(e) => set('kraPin', e.target.value)} placeholder="A000000000X" />
+            <input value={form.kraPin} onChange={(e) => set('kraPin', e.target.value)} />
           </div>
           <div className="field">
             <label>Currency</label>
-            <select value={form.currency} onChange={(e) => set('currency', e.target.value as BusinessProfile['currency'])}>
-              <option value="KES">KES — Kenya Shilling</option>
+            <select
+              value={form.currency}
+              onChange={(e) => set('currency', e.target.value as BusinessProfile['currency'])}
+            >
+              <option value="KES">KES</option>
               <option value="USD">USD</option>
               <option value="EUR">EUR</option>
             </select>
@@ -135,7 +164,7 @@ export function Settings() {
       </div>
 
       <div className="card" style={{ marginBottom: '1rem' }}>
-        <h3>Payment details (M-Pesa & bank)</h3>
+        <h3>M-Pesa & bank</h3>
         <div className="form-grid" style={{ marginTop: '0.75rem' }}>
           <div className="field">
             <label>M-Pesa Till</label>
@@ -146,7 +175,7 @@ export function Settings() {
             <input value={form.mpesaPaybill} onChange={(e) => set('mpesaPaybill', e.target.value)} />
           </div>
           <div className="field">
-            <label>Paybill account name / number</label>
+            <label>Paybill account</label>
             <input value={form.mpesaAccount} onChange={(e) => set('mpesaAccount', e.target.value)} />
           </div>
           <div className="field">
@@ -165,17 +194,16 @@ export function Settings() {
       </div>
 
       <div className="card" style={{ marginBottom: '1rem' }}>
-        <h3>Document defaults</h3>
+        <h3>Document numbering</h3>
         <div className="form-grid" style={{ marginTop: '0.75rem' }}>
           <div className="field">
             <label>Invoice prefix</label>
             <input value={form.invoicePrefix} onChange={(e) => set('invoicePrefix', e.target.value)} />
           </div>
           <div className="field">
-            <label>Next invoice number</label>
+            <label>Next invoice #</label>
             <input
               type="number"
-              min={1}
               value={form.nextInvoiceNumber}
               onChange={(e) => set('nextInvoiceNumber', Number(e.target.value) || 1)}
             />
@@ -185,29 +213,30 @@ export function Settings() {
             <input value={form.quotePrefix} onChange={(e) => set('quotePrefix', e.target.value)} />
           </div>
           <div className="field">
-            <label>Next quote number</label>
+            <label>Next quote #</label>
             <input
               type="number"
-              min={1}
               value={form.nextQuoteNumber}
               onChange={(e) => set('nextQuoteNumber', Number(e.target.value) || 1)}
             />
           </div>
           <div className="field full">
-            <label>Default invoice notes</label>
+            <label>Invoice notes default</label>
             <textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} />
           </div>
           <div className="field full">
-            <label>Default quotation notes</label>
+            <label>Quote notes default</label>
             <textarea value={form.quoteNotes} onChange={(e) => set('quoteNotes', e.target.value)} />
           </div>
         </div>
       </div>
 
       <div className="card" style={{ marginBottom: '1rem' }}>
-        <h3>Account (this device)</h3>
+        <h3>Workspace account (multi-business on this device)</h3>
         <p className="muted">
-          Prototype login is stored in your browser. Hosted multi-device accounts (like Wave cloud) come next.
+          Each SME signs up with email + password. Data is isolated per account in this browser
+          (cloud multi-device sync is the Pro SaaS roadmap — Supabase/Auth). Demo: demo@hustledesk.ke /
+          demo123
         </p>
         <div className="form-grid" style={{ marginTop: '0.75rem' }}>
           <div className="field">
@@ -225,34 +254,110 @@ export function Settings() {
         </div>
       </div>
 
-      <div className="card">
-        <h3>Data</h3>
-        <div className="toolbar" style={{ marginBottom: 0 }}>
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <h3>Export CSV & full backup</h3>
+        <div className="toolbar">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() =>
+              downloadCsv(
+                `invoices-${todayISO()}.csv`,
+                invoicesToCsv(data.invoices, data.clients, currency),
+              )
+            }
+          >
+            <Download size={16} /> Invoices CSV
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() =>
+              downloadCsv(`quotes-${todayISO()}.csv`, quotesToCsv(data.quotes, data.clients, currency))
+            }
+          >
+            <Download size={16} /> Quotes CSV
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => downloadCsv(`clients-${todayISO()}.csv`, clientsToCsv(data.clients))}
+          >
+            <Download size={16} /> Clients CSV
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() =>
+              downloadCsv(`expenses-${todayISO()}.csv`, expensesToCsv(data.expenses, currency))
+            }
+          >
+            <Download size={16} /> Expenses CSV
+          </button>
           <button
             type="button"
             className="btn btn-secondary"
             onClick={() => {
-              if (confirm('Reload demo data? Your current data will be replaced.')) {
-                resetDemo();
-                window.location.reload();
-              }
+              const blob = new Blob([exportBackup()], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `hustledesk-backup-${todayISO()}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
             }}
           >
-            <RotateCcw size={16} /> Load demo data
+            <Download size={16} /> Full JSON backup
           </button>
-          <button
-            type="button"
-            className="btn btn-danger"
-            onClick={() => {
-              if (confirm('Wipe all clients, quotes, and invoices?')) {
-                wipeData();
-                window.location.reload();
-              }
-            }}
-          >
-            <Trash2 size={16} /> Wipe all data
-          </button>
+          <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
+            <Upload size={16} /> Restore backup
+            <input
+              type="file"
+              accept="application/json,.json"
+              style={{ display: 'none' }}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const text = await file.text();
+                const res = importBackup(text);
+                if (!res.ok) alert(res.error);
+                else alert('Backup restored.');
+              }}
+            />
+          </label>
         </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <h3>Custom domain (your brand URL)</h3>
+        <ol className="muted" style={{ paddingLeft: '1.2rem' }}>
+          <li>
+            Buy a domain (e.g. <code>hustledesk.ke</code> or <code>app.yourbrand.co.ke</code>).
+          </li>
+          <li>
+            Open{' '}
+            <a href="https://vercel.com/aurel123/hustledesk/settings/domains" target="_blank" rel="noreferrer">
+              Vercel → hustledesk → Domains
+            </a>
+            .
+          </li>
+          <li>Add the domain and copy the DNS records Vercel shows (usually A/CNAME).</li>
+          <li>At your registrar (Namecheap, Safaricom Domains, Cloudflare…), paste those records.</li>
+          <li>Wait for SSL (often &lt; 30 min). Your app will open on your domain.</li>
+        </ol>
+      </div>
+
+      <div className="card">
+        <h3>Demo data</h3>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => {
+            if (confirm('Reset demo workspace and log into demo account?')) resetDemoData();
+          }}
+        >
+          <RotateCcw size={16} /> Load demo account
+        </button>
       </div>
     </div>
   );

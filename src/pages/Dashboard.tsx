@@ -61,7 +61,7 @@ export function Dashboard() {
           <div className="stat-value">{formatMoney(stats.outstanding, currency)}</div>
         </div>
         <div className="stat">
-          <div className="stat-label">Paid this month</div>
+          <div className="stat-label">Collected this month</div>
           <div className="stat-value success">{formatMoney(stats.paidThisMonth, currency)}</div>
         </div>
         <div className="stat">
@@ -69,10 +69,18 @@ export function Dashboard() {
           <div className="stat-value">{formatMoney(stats.quotePipeline, currency)}</div>
         </div>
         <div className="stat">
-          <div className="stat-label">Overdue invoices</div>
-          <div className={`stat-value ${stats.overdueCount ? 'danger' : ''}`}>{stats.overdueCount}</div>
+          <div className="stat-label">Profit this month</div>
+          <div className={`stat-value ${stats.profitThisMonth >= 0 ? 'success' : 'danger'}`}>
+            {formatMoney(stats.profitThisMonth, currency)}
+          </div>
         </div>
       </div>
+      {stats.overdueCount > 0 && (
+        <div className="alert alert-warn">
+          You have <strong>{stats.overdueCount}</strong> overdue invoice(s). Open each → <strong>Remind</strong> on
+          WhatsApp or send a <strong>Share link</strong>.
+        </div>
+      )}
 
       <div className="grid-2">
         <div className="card">

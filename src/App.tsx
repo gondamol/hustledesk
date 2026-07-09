@@ -1,3 +1,4 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import { Layout } from './components/Layout';
 import { Landing } from './pages/Landing';
@@ -12,6 +13,11 @@ import { QuoteForm } from './pages/QuoteForm';
 import { QuoteView } from './pages/QuoteView';
 import { Settings } from './pages/Settings';
 import { Pricing } from './pages/Pricing';
+import { Catalog } from './pages/Catalog';
+import { Expenses } from './pages/Expenses';
+import { Reports } from './pages/Reports';
+import { Receipts } from './pages/Receipts';
+import { SharePublic } from './pages/SharePublic';
 import type { Page } from './types';
 
 const APP_PAGES: Page[] = [
@@ -25,11 +31,15 @@ const APP_PAGES: Page[] = [
   'quote-new',
   'quote-edit',
   'quote-view',
+  'catalog',
+  'expenses',
+  'receipts',
+  'reports',
   'settings',
   'pricing',
 ];
 
-function Router() {
+function AppShell() {
   const { nav, data, go } = useApp();
   const page = nav.page;
 
@@ -37,17 +47,17 @@ function Router() {
   if (page === 'login') return <Login />;
   if (page === 'signup') return <Signup />;
 
-  // Protect app pages — still allow pricing public-ish via layout when logged in
   if (APP_PAGES.includes(page) && !data.session.loggedIn) {
-    // Pricing can be viewed from landing without auth — redirect others to login
     if (page === 'pricing') {
       return (
         <div className="landing">
-          <Pricing />
-          <div className="section" style={{ textAlign: 'center' }}>
-            <button type="button" className="btn btn-primary" onClick={() => go('login')}>
-              Log in to continue
-            </button>
+          <div className="section">
+            <Pricing />
+            <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+              <button type="button" className="btn btn-primary" onClick={() => go('login')}>
+                Log in to continue
+              </button>
+            </div>
           </div>
         </div>
       );
@@ -87,6 +97,18 @@ function Router() {
     case 'quote-view':
       body = <QuoteView />;
       break;
+    case 'catalog':
+      body = <Catalog />;
+      break;
+    case 'expenses':
+      body = <Expenses />;
+      break;
+    case 'receipts':
+      body = <Receipts />;
+      break;
+    case 'reports':
+      body = <Reports />;
+      break;
     case 'settings':
       body = <Settings />;
       break;
@@ -102,8 +124,14 @@ function Router() {
 
 export default function App() {
   return (
-    <AppProvider>
-      <Router />
-    </AppProvider>
+    <BrowserRouter>
+      <AppProvider>
+        <Routes>
+          <Route path="/share/:token" element={<SharePublic />} />
+          <Route path="/*" element={<AppShell />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AppProvider>
+    </BrowserRouter>
   );
 }

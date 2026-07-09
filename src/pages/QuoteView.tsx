@@ -1,8 +1,10 @@
-import { Download, Pencil, Printer, MessageCircle, ArrowLeft, FileText } from 'lucide-react';
+import { useState } from 'react';
+import { Download, Pencil, Printer, MessageCircle, ArrowLeft, FileText, Link2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatDate, formatMoney, invoiceTotals } from '../lib/format';
 import { downloadQuotePdf } from '../lib/pdf';
 import { QuoteStatusBadge } from '../components/StatusBadge';
+import { buildSharePayload, copyToClipboard, encodeShare, shareUrl } from '../lib/share';
 
 export function QuoteView() {
   const { data, nav, go, convertQuoteToInvoice, canCreateInvoice } = useApp();
@@ -10,6 +12,7 @@ export function QuoteView() {
   const client = quote ? data.clients.find((c) => c.id === quote.clientId) : undefined;
   const business = data.business;
   const currency = business.currency;
+  const [shareMsg, setShareMsg] = useState('');
 
   if (!quote) {
     return (
@@ -32,7 +35,7 @@ export function QuoteView() {
       return;
     }
     if (!canCreateInvoice) {
-      alert('Free invoice limit reached. Upgrade to Pro or convert after upgrading.');
+      alert('Free invoice limit reached. Upgrade to Pro.');
       go('pricing');
       return;
     }
@@ -40,9 +43,17 @@ export function QuoteView() {
     if (inv) go('invoice-view', inv.id);
   };
 
+  const shareLink = async () => {
+    const token = encodeShare(buildSharePayload('quote', business, client, { quote }));
+    const url = shareUrl(token);
+    await copyToClipboard(url);
+    setShareMsg(url);
+    alert('Quotation share link copied!');
+  };
+
   const shareWhatsApp = () => {
     const text = encodeURIComponent(
-      `Habari ${client?.name || ''},\n\nPlease find quotation ${quote.number} for ${formatMoney(totals.total, currency)}.\nValid until: ${formatDate(quote.validUntil)}.\n\nFrom: ${business.name}\n(I will also send the PDF.)`,
+      `Habari ${client?.name || ''},\n\nPlease find quotation ${quote.number} for ${formatMoney(totals.total, currency)}.\nValid until: ${formatDate(quote.validUntil)}.\n\nFrom: ${business.name}\n(I will also send the PDF / share link.)`,
     );
     const phone = (client?.phone || '').replace(/[^\d]/g, '');
     const url = phone
@@ -67,15 +78,14 @@ export function QuoteView() {
           <button type="button" className="btn btn-secondary" onClick={() => go('quote-edit', quote.id)}>
             <Pencil size={16} /> Edit
           </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => downloadQuotePdf(quote, client, business)}
-          >
+          <button type="button" className="btn btn-secondary" onClick={() => downloadQuotePdf(quote, client, business)}>
             <Download size={16} /> PDF
           </button>
           <button type="button" className="btn btn-secondary" onClick={() => window.print()}>
             <Printer size={16} /> Print
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={shareLink}>
+            <Link2 size={16} /> Share link
           </button>
           <button type="button" className="btn btn-secondary" onClick={shareWhatsApp}>
             <MessageCircle size={16} /> WhatsApp
@@ -96,6 +106,13 @@ export function QuoteView() {
           )}
         </div>
       </div>
+
+      {shareMsg && (
+        <div className="alert alert-info no-print">
+          Share link:
+          <div style={{ wordBreak: 'break-all', fontSize: '0.85rem', marginTop: 6 }}>{shareMsg}</div>
+        </div>
+      )}
 
       <div className="invoice-sheet">
         <div className="invoice-sheet-head">

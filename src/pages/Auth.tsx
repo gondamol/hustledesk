@@ -53,8 +53,8 @@ export function Login() {
             </button>
           </p>
           <p className="help" style={{ marginTop: '1rem' }}>
-            v1 stores accounts in this browser only (like a prototype Wave/FreshBooks). Cloud multi-device
-            login ships with hosted Pro.
+            Multi-business accounts on this device (each email = isolated workspace). Cloud multi-device
+            auth (Supabase) is the next Pro infrastructure step — share links already work anywhere.
           </p>
         </div>
       </div>

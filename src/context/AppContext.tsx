@@ -10,18 +10,26 @@ import {
 import type {
   AppData,
   BusinessProfile,
+  CatalogItem,
   Client,
+  Expense,
   Invoice,
   Page,
+  PaymentRecord,
   Quote,
+  Receipt,
 } from '../types';
 import {
-  clearAllData,
+  createAccount,
   loadData,
+  loginAccount,
+  logoutAccount,
   nextInvoiceNumber,
   nextQuoteNumber,
-  resetData,
-  saveData,
+  nextReceiptNumber,
+  persistWorkspace,
+  resetDemo,
+  getSessionEmail,
 } from '../lib/storage';
 import { addDaysISO, invoiceTotals, todayISO, uid } from '../lib/format';
 
@@ -29,6 +37,7 @@ interface NavState {
   page: Page;
   invoiceId?: string;
   quoteId?: string;
+  receiptId?: string;
 }
 
 interface AppContextValue {
@@ -42,10 +51,23 @@ interface AppContextValue {
   saveInvoice: (invoice: Invoice, isNew: boolean) => void;
   deleteInvoice: (id: string) => void;
   createBlankInvoice: (clientId?: string) => Invoice;
+  duplicateInvoice: (id: string) => Invoice | null;
+  recordPayment: (
+    invoiceId: string,
+    payment: Omit<PaymentRecord, 'id'>,
+    issueReceipt: boolean,
+  ) => Receipt | null;
   saveQuote: (quote: Quote, isNew: boolean) => void;
   deleteQuote: (id: string) => void;
   createBlankQuote: (clientId?: string) => Quote;
   convertQuoteToInvoice: (quoteId: string) => Invoice | null;
+  saveCatalogItem: (item: CatalogItem, isNew: boolean) => void;
+  deleteCatalogItem: (id: string) => void;
+  saveExpense: (expense: Expense, isNew: boolean) => void;
+  deleteExpense: (id: string) => void;
+  deleteReceipt: (id: string) => void;
+  importBackup: (json: string) => { ok: boolean; error?: string };
+  exportBackup: () => string;
   getClient: (id: string) => Client | undefined;
   signup: (payload: {
     businessName: string;
@@ -64,35 +86,36 @@ interface AppContextValue {
     clientCount: number;
     openQuotes: number;
     quotePipeline: number;
+    expensesThisMonth: number;
+    profitThisMonth: number;
   };
   freeInvoiceLimit: number;
   freeQuoteLimit: number;
   canCreateInvoice: boolean;
   canCreateQuote: boolean;
-  resetDemo: () => void;
-  wipeData: () => void;
+  resetDemoData: () => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
-const FREE_INVOICE_LIMIT = 5;
-const FREE_QUOTE_LIMIT = 5;
+const FREE_INVOICE_LIMIT = 8;
+const FREE_QUOTE_LIMIT = 8;
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(() => loadData());
   const [nav, setNav] = useState<NavState>({ page: 'landing' });
 
   useEffect(() => {
-    saveData(data);
+    const email = getSessionEmail() || data.business.accountEmail;
+    if (email && data.session.loggedIn) {
+      persistWorkspace(email, data);
+    }
   }, [data]);
 
   const go = useCallback((page: Page, id?: string) => {
-    if (page.startsWith('quote')) {
-      setNav({ page, quoteId: id });
-    } else if (page.startsWith('invoice')) {
-      setNav({ page, invoiceId: id });
-    } else {
-      setNav({ page });
-    }
+    if (page.startsWith('quote')) setNav({ page, quoteId: id });
+    else if (page.startsWith('invoice')) setNav({ page, invoiceId: id });
+    else if (page === 'receipts') setNav({ page, receiptId: id });
+    else setNav({ page });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
@@ -101,11 +124,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addClient = useCallback((client: Omit<Client, 'id' | 'createdAt'>) => {
-    const full: Client = {
-      ...client,
-      id: uid('cli'),
-      createdAt: new Date().toISOString(),
-    };
+    const full: Client = { ...client, id: uid('cli'), createdAt: new Date().toISOString() };
     setData((d) => ({ ...d, clients: [full, ...d.clients] }));
     return full;
   }, []);
@@ -118,26 +137,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deleteClient = useCallback((id: string) => {
-    setData((d) => ({
-      ...d,
-      clients: d.clients.filter((c) => c.id !== id),
-    }));
+    setData((d) => ({ ...d, clients: d.clients.filter((c) => c.id !== id) }));
   }, []);
 
   const saveInvoice = useCallback((invoice: Invoice, isNew: boolean) => {
     setData((d) => {
-      let invoices = d.invoices;
-      let business = d.business;
       if (isNew) {
-        invoices = [invoice, ...d.invoices];
-        business = {
-          ...d.business,
-          nextInvoiceNumber: (d.business.nextInvoiceNumber || 1) + 1,
+        return {
+          ...d,
+          invoices: [invoice, ...d.invoices],
+          business: {
+            ...d.business,
+            nextInvoiceNumber: (d.business.nextInvoiceNumber || 1) + 1,
+          },
         };
-      } else {
-        invoices = d.invoices.map((i) => (i.id === invoice.id ? invoice : i));
       }
-      return { ...d, invoices, business };
+      return {
+        ...d,
+        invoices: d.invoices.map((i) => (i.id === invoice.id ? invoice : i)),
+      };
     });
   }, []);
 
@@ -146,43 +164,123 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const createBlankInvoice = useCallback(
-    (clientId?: string): Invoice => {
-      const number = nextInvoiceNumber(data.business);
-      return {
+    (clientId?: string): Invoice => ({
+      id: uid('inv'),
+      number: nextInvoiceNumber(data.business),
+      clientId: clientId || data.clients[0]?.id || '',
+      issueDate: todayISO(),
+      dueDate: addDaysISO(7),
+      status: 'draft',
+      items: [{ id: uid('li'), description: '', unit: 'unit', quantity: 1, unitPrice: 0 }],
+      taxRate: 16,
+      discount: 0,
+      notes: data.business.notes || '',
+      amountPaid: 0,
+      payments: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }),
+    [data.business, data.clients],
+  );
+
+  const duplicateInvoice = useCallback(
+    (id: string): Invoice | null => {
+      const src = data.invoices.find((i) => i.id === id);
+      if (!src) return null;
+      if (data.business.plan !== 'pro' && data.invoices.length >= FREE_INVOICE_LIMIT) return null;
+      const copy: Invoice = {
+        ...src,
         id: uid('inv'),
-        number,
-        clientId: clientId || data.clients[0]?.id || '',
+        number: nextInvoiceNumber(data.business),
+        status: 'draft',
+        amountPaid: 0,
+        payments: [],
         issueDate: todayISO(),
         dueDate: addDaysISO(7),
-        status: 'draft',
-        items: [
-          { id: uid('li'), description: '', unit: 'unit', quantity: 1, unitPrice: 0 },
-        ],
-        taxRate: 16,
-        discount: 0,
-        notes: data.business.notes || '',
-        amountPaid: 0,
+        items: src.items.map((it) => ({ ...it, id: uid('li') })),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        quoteId: undefined,
+        shareId: undefined,
       };
+      setData((d) => ({
+        ...d,
+        invoices: [copy, ...d.invoices],
+        business: {
+          ...d.business,
+          nextInvoiceNumber: (d.business.nextInvoiceNumber || 1) + 1,
+        },
+      }));
+      return copy;
     },
-    [data.business, data.clients],
+    [data.invoices, data.business],
+  );
+
+  const recordPayment = useCallback(
+    (invoiceId: string, payment: Omit<PaymentRecord, 'id'>, issueReceipt: boolean): Receipt | null => {
+      let created: Receipt | null = null;
+      setData((d) => {
+        const inv = d.invoices.find((i) => i.id === invoiceId);
+        if (!inv) return d;
+        const pay: PaymentRecord = { ...payment, id: uid('pay') };
+        const amountPaid = (inv.amountPaid || 0) + pay.amount;
+        const { total } = invoiceTotals(inv.items, inv.taxRate, inv.discount);
+        let status = inv.status;
+        if (amountPaid >= total - 0.01) status = 'paid';
+        else if (amountPaid > 0) status = 'partial';
+
+        const invoices = d.invoices.map((i) =>
+          i.id === invoiceId
+            ? {
+                ...i,
+                amountPaid,
+                status,
+                payments: [...(i.payments || []), pay],
+                updatedAt: new Date().toISOString(),
+              }
+            : i,
+        );
+
+        let receipts = d.receipts;
+        let business = d.business;
+        if (issueReceipt) {
+          created = {
+            id: uid('rct'),
+            number: nextReceiptNumber(d.business),
+            invoiceId,
+            clientId: inv.clientId,
+            date: pay.date,
+            amount: pay.amount,
+            method: pay.method,
+            reference: pay.reference,
+            createdAt: new Date().toISOString(),
+          };
+          receipts = [created, ...d.receipts];
+          business = {
+            ...d.business,
+            nextReceiptNumber: (d.business.nextReceiptNumber || 1) + 1,
+          };
+        }
+        return { ...d, invoices, receipts, business };
+      });
+      return created;
+    },
+    [],
   );
 
   const saveQuote = useCallback((quote: Quote, isNew: boolean) => {
     setData((d) => {
-      let quotes = d.quotes;
-      let business = d.business;
       if (isNew) {
-        quotes = [quote, ...d.quotes];
-        business = {
-          ...d.business,
-          nextQuoteNumber: (d.business.nextQuoteNumber || 1) + 1,
+        return {
+          ...d,
+          quotes: [quote, ...d.quotes],
+          business: {
+            ...d.business,
+            nextQuoteNumber: (d.business.nextQuoteNumber || 1) + 1,
+          },
         };
-      } else {
-        quotes = d.quotes.map((q) => (q.id === quote.id ? quote : q));
       }
-      return { ...d, quotes, business };
+      return { ...d, quotes: d.quotes.map((q) => (q.id === quote.id ? quote : q)) };
     });
   }, []);
 
@@ -191,25 +289,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const createBlankQuote = useCallback(
-    (clientId?: string): Quote => {
-      const number = nextQuoteNumber(data.business);
-      return {
-        id: uid('qt'),
-        number,
-        clientId: clientId || data.clients[0]?.id || '',
-        issueDate: todayISO(),
-        validUntil: addDaysISO(14),
-        status: 'draft',
-        items: [
-          { id: uid('li'), description: '', unit: 'unit', quantity: 1, unitPrice: 0 },
-        ],
-        taxRate: 16,
-        discount: 0,
-        notes: data.business.quoteNotes || '',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-    },
+    (clientId?: string): Quote => ({
+      id: uid('qt'),
+      number: nextQuoteNumber(data.business),
+      clientId: clientId || data.clients[0]?.id || '',
+      issueDate: todayISO(),
+      validUntil: addDaysISO(14),
+      status: 'draft',
+      items: [{ id: uid('li'), description: '', unit: 'unit', quantity: 1, unitPrice: 0 }],
+      taxRate: 16,
+      discount: 0,
+      notes: data.business.quoteNotes || '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }),
     [data.business, data.clients],
   );
 
@@ -217,9 +310,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (quoteId: string): Invoice | null => {
       const quote = data.quotes.find((q) => q.id === quoteId);
       if (!quote) return null;
-      if (data.business.plan !== 'pro' && data.invoices.length >= FREE_INVOICE_LIMIT) {
-        return null;
-      }
+      if (data.business.plan !== 'pro' && data.invoices.length >= FREE_INVOICE_LIMIT) return null;
       const inv: Invoice = {
         id: uid('inv'),
         number: nextInvoiceNumber(data.business),
@@ -232,6 +323,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         discount: quote.discount,
         notes: `Converted from quotation ${quote.number}.\n${quote.notes || ''}`,
         amountPaid: 0,
+        payments: [],
         quoteId: quote.id,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -259,6 +351,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [data.quotes, data.business, data.invoices.length],
   );
 
+  const saveCatalogItem = useCallback((item: CatalogItem, isNew: boolean) => {
+    setData((d) => ({
+      ...d,
+      catalog: isNew ? [item, ...d.catalog] : d.catalog.map((c) => (c.id === item.id ? item : c)),
+    }));
+  }, []);
+
+  const deleteCatalogItem = useCallback((id: string) => {
+    setData((d) => ({ ...d, catalog: d.catalog.filter((c) => c.id !== id) }));
+  }, []);
+
+  const saveExpense = useCallback((expense: Expense, isNew: boolean) => {
+    setData((d) => ({
+      ...d,
+      expenses: isNew
+        ? [expense, ...d.expenses]
+        : d.expenses.map((e) => (e.id === expense.id ? expense : e)),
+    }));
+  }, []);
+
+  const deleteExpense = useCallback((id: string) => {
+    setData((d) => ({ ...d, expenses: d.expenses.filter((e) => e.id !== id) }));
+  }, []);
+
+  const deleteReceipt = useCallback((id: string) => {
+    setData((d) => ({ ...d, receipts: d.receipts.filter((r) => r.id !== id) }));
+  }, []);
+
+  const exportBackup = useCallback(() => JSON.stringify(data, null, 2), [data]);
+
+  const importBackup = useCallback((json: string) => {
+    try {
+      const parsed = JSON.parse(json) as AppData;
+      if (!parsed.business || !Array.isArray(parsed.invoices)) {
+        return { ok: false, error: 'Invalid backup file.' };
+      }
+      setData({
+        ...parsed,
+        catalog: parsed.catalog || [],
+        expenses: parsed.expenses || [],
+        receipts: parsed.receipts || [],
+        session: { loggedIn: true },
+      });
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Could not parse JSON backup.' };
+    }
+  }, []);
+
   const getClient = useCallback(
     (id: string) => data.clients.find((c) => c.id === id),
     [data.clients],
@@ -272,64 +413,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       password: string;
       phone: string;
     }) => {
-      if (!payload.email.trim() || !payload.password || payload.password.length < 4) {
-        return { ok: false, error: 'Email and password (min 4 chars) required.' };
-      }
-      if (!payload.businessName.trim()) {
-        return { ok: false, error: 'Business name is required.' };
-      }
-      setData((d) => ({
-        ...d,
-        business: {
-          ...d.business,
-          name: payload.businessName.trim(),
-          owner: payload.owner.trim(),
-          email: payload.email.trim().toLowerCase(),
-          phone: payload.phone.trim(),
-          accountEmail: payload.email.trim().toLowerCase(),
-          accountPassword: payload.password,
-          onboardingDone: true,
-        },
-        session: { loggedIn: true },
-      }));
+      const res = createAccount(payload.email, payload.password, {
+        name: payload.businessName.trim(),
+        owner: payload.owner.trim(),
+        phone: payload.phone.trim(),
+      });
+      if (!res.ok) return { ok: false, error: res.error };
+      setData(res.data);
       return { ok: true };
     },
     [],
   );
 
-  const login = useCallback(
-    (email: string, password: string) => {
-      const e = email.trim().toLowerCase();
-      // Demo account always works
-      if (
-        (e === data.business.accountEmail && password === data.business.accountPassword) ||
-        (e === 'demo@hustledesk.ke' && password === 'demo123')
-      ) {
-        setData((d) => ({ ...d, session: { loggedIn: true } }));
-        return { ok: true };
-      }
-      // First-time: if no account set, allow login that sets session if matching email on business
-      if (!data.business.accountEmail && data.business.email.toLowerCase() === e) {
-        setData((d) => ({
-          ...d,
-          business: {
-            ...d.business,
-            accountEmail: e,
-            accountPassword: password,
-            onboardingDone: true,
-          },
-          session: { loggedIn: true },
-        }));
-        return { ok: true };
-      }
-      return { ok: false, error: 'Wrong email or password. Try demo@hustledesk.ke / demo123' };
-    },
-    [data.business],
-  );
+  const login = useCallback((email: string, password: string) => {
+    const res = loginAccount(email, password);
+    if (!res.ok) return { ok: false, error: res.error };
+    setData(res.data);
+    return { ok: true };
+  }, []);
 
   const logout = useCallback(() => {
-    setData((d) => ({ ...d, session: { loggedIn: false } }));
+    logoutAccount();
+    setData((d) => ({ ...emptyLoggedOut(d), session: { loggedIn: false } }));
     setNav({ page: 'landing' });
+  }, []);
+
+  const resetDemoData = useCallback(() => {
+    setData(resetDemo());
+    setNav({ page: 'dashboard' });
   }, []);
 
   const stats = useMemo(() => {
@@ -341,13 +452,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let overdueCount = 0;
     let quotePipeline = 0;
     let openQuotes = 0;
+    let expensesThisMonth = 0;
 
     for (const inv of data.invoices) {
       const { total } = invoiceTotals(inv.items, inv.taxRate, inv.discount);
       const balance = Math.max(0, total - (inv.amountPaid || 0));
       if (inv.status !== 'paid' && inv.status !== 'draft') outstanding += balance;
       if (inv.status === 'overdue') overdueCount += 1;
-      if (inv.status === 'paid') {
+      for (const p of inv.payments || []) {
+        const d = new Date(p.date);
+        if (d.getMonth() === month && d.getFullYear() === year) paidThisMonth += p.amount;
+      }
+      if (inv.status === 'paid' && !(inv.payments || []).length) {
         const d = new Date(inv.updatedAt || inv.issueDate);
         if (d.getMonth() === month && d.getFullYear() === year) paidThisMonth += total;
       }
@@ -356,9 +472,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     for (const q of data.quotes) {
       if (q.status === 'sent' || q.status === 'draft' || q.status === 'accepted') {
         openQuotes += 1;
-        const { total } = invoiceTotals(q.items, q.taxRate, q.discount);
-        quotePipeline += total;
+        quotePipeline += invoiceTotals(q.items, q.taxRate, q.discount).total;
       }
+    }
+
+    for (const e of data.expenses) {
+      const d = new Date(e.date);
+      if (d.getMonth() === month && d.getFullYear() === year) expensesThisMonth += e.amount;
     }
 
     return {
@@ -369,16 +489,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       clientCount: data.clients.length,
       openQuotes,
       quotePipeline,
+      expensesThisMonth,
+      profitThisMonth: paidThisMonth - expensesThisMonth,
     };
-  }, [data.invoices, data.clients, data.quotes]);
+  }, [data]);
 
   const canCreateInvoice =
     data.business.plan === 'pro' || data.invoices.length < FREE_INVOICE_LIMIT;
   const canCreateQuote =
     data.business.plan === 'pro' || data.quotes.length < FREE_QUOTE_LIMIT;
-
-  const resetDemo = useCallback(() => setData(resetData()), []);
-  const wipeData = useCallback(() => setData(clearAllData()), []);
 
   const value: AppContextValue = {
     data,
@@ -391,10 +510,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveInvoice,
     deleteInvoice,
     createBlankInvoice,
+    duplicateInvoice,
+    recordPayment,
     saveQuote,
     deleteQuote,
     createBlankQuote,
     convertQuoteToInvoice,
+    saveCatalogItem,
+    deleteCatalogItem,
+    saveExpense,
+    deleteExpense,
+    deleteReceipt,
+    importBackup,
+    exportBackup,
     getClient,
     signup,
     login,
@@ -404,11 +532,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     freeQuoteLimit: FREE_QUOTE_LIMIT,
     canCreateInvoice,
     canCreateQuote,
-    resetDemo,
-    wipeData,
+    resetDemoData,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+}
+
+function emptyLoggedOut(d: AppData): AppData {
+  return {
+    ...d,
+    session: { loggedIn: false },
+  };
 }
 
 export function useApp() {

@@ -1,5 +1,14 @@
 export type PaymentStatus = 'draft' | 'sent' | 'partial' | 'paid' | 'overdue';
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'converted';
+export type ExpenseCategory =
+  | 'supplies'
+  | 'rent'
+  | 'transport'
+  | 'salaries'
+  | 'marketing'
+  | 'utilities'
+  | 'tax'
+  | 'other';
 
 export interface BusinessProfile {
   name: string;
@@ -18,16 +27,20 @@ export interface BusinessProfile {
   currency: 'KES' | 'USD' | 'EUR';
   invoicePrefix: string;
   quotePrefix: string;
+  receiptPrefix: string;
   nextInvoiceNumber: number;
   nextQuoteNumber: number;
+  nextReceiptNumber: number;
   notes: string;
   quoteNotes: string;
-  logoDataUrl: string; // base64 data URL
+  logoDataUrl: string;
   plan: 'free' | 'pro';
-  /** Simple local account — real multi-user cloud auth is Pro SaaS phase 2 */
   accountEmail: string;
   accountPassword: string;
   onboardingDone: boolean;
+  /** Shown on public share pages */
+  brandColor: string;
+  paymentTerms: string;
 }
 
 export interface Client {
@@ -44,10 +57,29 @@ export interface Client {
 export interface LineItem {
   id: string;
   description: string;
-  /** e.g. pcs, hrs, days, kg, job */
   unit: string;
   quantity: number;
   unitPrice: number;
+}
+
+/** Saved products/services for quick insert */
+export interface CatalogItem {
+  id: string;
+  name: string;
+  unit: string;
+  unitPrice: number;
+  taxRate: number;
+  category: string;
+  createdAt: string;
+}
+
+export interface PaymentRecord {
+  id: string;
+  amount: number;
+  date: string;
+  method: string;
+  reference: string;
+  note: string;
 }
 
 export interface Invoice {
@@ -62,8 +94,9 @@ export interface Invoice {
   discount: number;
   notes: string;
   amountPaid: number;
-  /** If created from a quote */
+  payments: PaymentRecord[];
   quoteId?: string;
+  shareId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -80,8 +113,32 @@ export interface Quote {
   discount: number;
   notes: string;
   convertedInvoiceId?: string;
+  shareId?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Expense {
+  id: string;
+  date: string;
+  category: ExpenseCategory;
+  description: string;
+  amount: number;
+  vendor: string;
+  paymentMethod: string;
+  createdAt: string;
+}
+
+export interface Receipt {
+  id: string;
+  number: string;
+  invoiceId: string;
+  clientId: string;
+  date: string;
+  amount: number;
+  method: string;
+  reference: string;
+  createdAt: string;
 }
 
 export interface AppData {
@@ -89,9 +146,43 @@ export interface AppData {
   clients: Client[];
   invoices: Invoice[];
   quotes: Quote[];
+  catalog: CatalogItem[];
+  expenses: Expense[];
+  receipts: Receipt[];
   session: {
     loggedIn: boolean;
   };
+}
+
+/** Public share payload (no secrets) — encoded into URL */
+export interface SharePayload {
+  v: 1;
+  kind: 'invoice' | 'quote' | 'receipt';
+  business: Pick<
+    BusinessProfile,
+    | 'name'
+    | 'email'
+    | 'phone'
+    | 'address'
+    | 'city'
+    | 'kraPin'
+    | 'mpesaTill'
+    | 'mpesaPaybill'
+    | 'mpesaAccount'
+    | 'bankName'
+    | 'bankAccount'
+    | 'bankBranch'
+    | 'currency'
+    | 'logoDataUrl'
+    | 'brandColor'
+    | 'paymentTerms'
+    | 'plan'
+  >;
+  client?: Pick<Client, 'name' | 'company' | 'email' | 'phone' | 'address'>;
+  invoice?: Invoice;
+  quote?: Quote;
+  receipt?: Receipt;
+  createdAt: string;
 }
 
 export type Page =
@@ -108,5 +199,9 @@ export type Page =
   | 'quote-new'
   | 'quote-edit'
   | 'quote-view'
+  | 'catalog'
+  | 'expenses'
+  | 'receipts'
+  | 'reports'
   | 'settings'
   | 'pricing';

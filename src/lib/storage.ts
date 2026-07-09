@@ -1,8 +1,24 @@
-import type { AppData, BusinessProfile, Client, Invoice, Quote } from '../types';
+import type {
+  AppData,
+  BusinessProfile,
+  CatalogItem,
+  Client,
+  Invoice,
+  Quote,
+} from '../types';
 import { addDaysISO, todayISO, uid } from './format';
 
-const STORAGE_KEY = 'hustledesk_v2';
-const LEGACY_KEY = 'hustledesk_v1';
+const DATA_KEY = 'hustledesk_v3';
+const ACCOUNTS_KEY = 'hustledesk_accounts_v1';
+const SESSION_KEY = 'hustledesk_session_v1';
+const LEGACY_KEYS = ['hustledesk_v2', 'hustledesk_v1'];
+
+export interface AccountRecord {
+  email: string;
+  password: string;
+  createdAt: string;
+  data: AppData;
+}
 
 export const defaultBusiness = (): BusinessProfile => ({
   name: '',
@@ -21,16 +37,44 @@ export const defaultBusiness = (): BusinessProfile => ({
   currency: 'KES',
   invoicePrefix: 'INV',
   quotePrefix: 'QT',
+  receiptPrefix: 'RCT',
   nextInvoiceNumber: 1,
   nextQuoteNumber: 1,
+  nextReceiptNumber: 1,
   notes: 'Thank you for your business. Payment is due by the date above.',
-  quoteNotes: 'This quotation is valid until the date shown. Prices in KES unless stated.',
+  quoteNotes: 'This quotation is valid until the date shown.',
   logoDataUrl: '',
   plan: 'free',
   accountEmail: '',
   accountPassword: '',
   onboardingDone: false,
+  brandColor: '#0f766e',
+  paymentTerms: 'Payment due within 7 days of invoice date.',
 });
+
+function ensureInvoice(inv: Invoice): Invoice {
+  return {
+    ...inv,
+    payments: inv.payments || [],
+    items: (inv.items || []).map((it) => ({
+      ...it,
+      unit: it.unit || 'unit',
+    })),
+  };
+}
+
+function emptyData(): AppData {
+  return {
+    business: defaultBusiness(),
+    clients: [],
+    invoices: [],
+    quotes: [],
+    catalog: [],
+    expenses: [],
+    receipts: [],
+    session: { loggedIn: false },
+  };
+}
 
 function seedData(): AppData {
   const clientA: Client = {
@@ -54,6 +98,36 @@ function seedData(): AppData {
     createdAt: new Date().toISOString(),
   };
 
+  const catalog: CatalogItem[] = [
+    {
+      id: uid('cat'),
+      name: 'Website maintenance (monthly)',
+      unit: 'mo',
+      unitPrice: 18000,
+      taxRate: 16,
+      category: 'Services',
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: uid('cat'),
+      name: 'Logo design package',
+      unit: 'job',
+      unitPrice: 12000,
+      taxRate: 0,
+      category: 'Design',
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: uid('cat'),
+      name: 'Event staff',
+      unit: 'person',
+      unitPrice: 3500,
+      taxRate: 16,
+      category: 'Labour',
+      createdAt: new Date().toISOString(),
+    },
+  ];
+
   const inv1: Invoice = {
     id: uid('inv'),
     number: 'INV-0001',
@@ -68,8 +142,9 @@ function seedData(): AppData {
     ],
     taxRate: 16,
     discount: 0,
-    notes: 'Pay via M-Pesa Till. Quote reference: GL-2026.',
+    notes: 'Pay via M-Pesa Till.',
     amountPaid: 0,
+    payments: [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -88,6 +163,16 @@ function seedData(): AppData {
     discount: 1000,
     notes: 'Monthly maintenance package',
     amountPaid: 5000,
+    payments: [
+      {
+        id: uid('pay'),
+        amount: 5000,
+        date: addDaysISO(-10),
+        method: 'M-Pesa',
+        reference: 'QWE123XYZ',
+        note: 'Partial deposit',
+      },
+    ],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -106,6 +191,16 @@ function seedData(): AppData {
     discount: 0,
     notes: '',
     amountPaid: 12000,
+    payments: [
+      {
+        id: uid('pay'),
+        amount: 12000,
+        date: addDaysISO(-30),
+        method: 'M-Pesa',
+        reference: 'PAID001',
+        note: 'Full payment',
+      },
+    ],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -124,7 +219,7 @@ function seedData(): AppData {
     ],
     taxRate: 16,
     discount: 5000,
-    notes: 'Includes setup and cleanup. 50% deposit to confirm date.',
+    notes: '50% deposit to confirm date.',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -145,92 +240,240 @@ function seedData(): AppData {
       bankBranch: 'Westlands',
       nextInvoiceNumber: 4,
       nextQuoteNumber: 2,
+      nextReceiptNumber: 1,
       accountEmail: 'demo@hustledesk.ke',
       accountPassword: 'demo123',
       onboardingDone: true,
-      notes: 'Asante sana for your business. Kindly pay by the due date via M-Pesa or bank transfer.',
+      brandColor: '#0f766e',
+      notes: 'Asante sana. Kindly pay by the due date via M-Pesa or bank transfer.',
       quoteNotes: 'Quotation valid for 14 days. 50% deposit locks your date.',
     },
     clients: [clientA, clientB],
     invoices: [inv1, inv2, inv3],
     quotes: [quote1],
+    catalog,
+    expenses: [
+      {
+        id: uid('exp'),
+        date: addDaysISO(-3),
+        category: 'supplies',
+        description: 'Packaging materials',
+        amount: 4500,
+        vendor: 'Carrefour',
+        paymentMethod: 'M-Pesa',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: uid('exp'),
+        date: addDaysISO(-12),
+        category: 'transport',
+        description: 'Client meeting Uber',
+        amount: 850,
+        vendor: 'Uber',
+        paymentMethod: 'M-Pesa',
+        createdAt: new Date().toISOString(),
+      },
+    ],
+    receipts: [],
     session: { loggedIn: false },
   };
 }
 
 function migrate(raw: unknown): AppData {
-  const d = raw as Partial<AppData> & { business?: Partial<BusinessProfile> };
-  const base = seedData();
-  const business = { ...defaultBusiness(), ...base.business, ...d.business };
-  // ensure new fields
-  if (!business.quotePrefix) business.quotePrefix = 'QT';
-  if (!business.nextQuoteNumber) business.nextQuoteNumber = 1;
-  if (business.logoDataUrl === undefined) business.logoDataUrl = '';
-  if (!business.quoteNotes) business.quoteNotes = defaultBusiness().quoteNotes;
-
-  const invoices = (d.invoices || base.invoices).map((inv) => ({
-    ...inv,
-    items: (inv.items || []).map((it) => {
-      const row = it as { unit?: string };
-      return { ...it, unit: row.unit || 'unit' };
-    }),
-  }));
-
-  const quotes = (d.quotes || []).map((q) => ({
-    ...q,
-    items: (q.items || []).map((it) => {
-      const row = it as { unit?: string };
-      return { ...it, unit: row.unit || 'unit' };
-    }),
-  }));
+  const d = raw as Partial<AppData>;
+  const business = { ...defaultBusiness(), ...d.business };
+  if (!business.receiptPrefix) business.receiptPrefix = 'RCT';
+  if (!business.nextReceiptNumber) business.nextReceiptNumber = 1;
+  if (!business.brandColor) business.brandColor = '#0f766e';
+  if (!business.paymentTerms) business.paymentTerms = defaultBusiness().paymentTerms;
 
   return {
     business,
-    clients: d.clients || base.clients,
-    invoices,
-    quotes: quotes.length ? quotes : base.quotes,
+    clients: d.clients || [],
+    invoices: (d.invoices || []).map(ensureInvoice),
+    quotes: d.quotes || [],
+    catalog: d.catalog || [],
+    expenses: d.expenses || [],
+    receipts: d.receipts || [],
     session: d.session || { loggedIn: false },
   };
 }
 
-export function loadData(): AppData {
+export function loadAccounts(): Record<string, AccountRecord> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_KEY);
-    if (!raw) {
-      const seeded = seedData();
-      saveData(seeded);
-      return seeded;
-    }
-    const parsed = migrate(JSON.parse(raw));
-    saveData(parsed);
-    return parsed;
+    const raw = localStorage.getItem(ACCOUNTS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, AccountRecord>) : {};
   } catch {
-    const seeded = seedData();
-    saveData(seeded);
-    return seeded;
+    return {};
   }
 }
 
-export function saveData(data: AppData): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+export function saveAccounts(accounts: Record<string, AccountRecord>) {
+  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
 }
 
-export function resetData(): AppData {
-  const seeded = seedData();
-  saveData(seeded);
-  return seeded;
+export function getSessionEmail(): string | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw) as { email?: string };
+    return s.email || null;
+  } catch {
+    return null;
+  }
 }
 
-export function clearAllData(): AppData {
-  const empty: AppData = {
-    business: defaultBusiness(),
-    clients: [],
-    invoices: [],
-    quotes: [],
-    session: { loggedIn: false },
+export function setSessionEmail(email: string | null) {
+  if (!email) localStorage.removeItem(SESSION_KEY);
+  else localStorage.setItem(SESSION_KEY, JSON.stringify({ email }));
+}
+
+/** Load workspace for current session, or seed demo */
+export function loadData(): AppData {
+  const email = getSessionEmail();
+  const accounts = loadAccounts();
+
+  if (email && accounts[email]) {
+    const data = migrate(accounts[email].data);
+    data.session = { loggedIn: true };
+    return data;
+  }
+
+  // migrate legacy single-workspace into demo account once
+  for (const key of [DATA_KEY, ...LEGACY_KEYS]) {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      try {
+        const data = migrate(JSON.parse(raw));
+        // ensure demo account exists
+        if (!accounts['demo@hustledesk.ke']) {
+          const demo = seedData();
+          accounts['demo@hustledesk.ke'] = {
+            email: 'demo@hustledesk.ke',
+            password: 'demo123',
+            createdAt: new Date().toISOString(),
+            data: { ...demo, session: { loggedIn: false } },
+          };
+          saveAccounts(accounts);
+        }
+        // if legacy had real account, register it
+        if (data.business.accountEmail) {
+          const e = data.business.accountEmail.toLowerCase();
+          if (!accounts[e]) {
+            accounts[e] = {
+              email: e,
+              password: data.business.accountPassword || 'changeme',
+              createdAt: new Date().toISOString(),
+              data: { ...data, session: { loggedIn: false } },
+            };
+            saveAccounts(accounts);
+          }
+        }
+        localStorage.removeItem(key);
+      } catch {
+        /* ignore */
+      }
+      break;
+    }
+  }
+
+  // ensure demo always available
+  if (!accounts['demo@hustledesk.ke']) {
+    const demo = seedData();
+    accounts['demo@hustledesk.ke'] = {
+      email: 'demo@hustledesk.ke',
+      password: 'demo123',
+      createdAt: new Date().toISOString(),
+      data: { ...demo, session: { loggedIn: false } },
+    };
+    saveAccounts(accounts);
+  }
+
+  return { ...emptyData(), session: { loggedIn: false } };
+}
+
+export function persistWorkspace(email: string, data: AppData) {
+  const accounts = loadAccounts();
+  const key = email.toLowerCase();
+  if (!accounts[key]) return;
+  accounts[key] = {
+    ...accounts[key],
+    data: { ...data, session: { loggedIn: false } },
   };
-  saveData(empty);
-  return empty;
+  saveAccounts(accounts);
+  // also keep last active snapshot
+  localStorage.setItem(DATA_KEY, JSON.stringify(data));
+}
+
+export function createAccount(
+  email: string,
+  password: string,
+  initial: Partial<BusinessProfile>,
+): { ok: true; data: AppData } | { ok: false; error: string } {
+  const e = email.trim().toLowerCase();
+  if (!e || !password || password.length < 4) {
+    return { ok: false, error: 'Email and password (min 4 chars) required.' };
+  }
+  const accounts = loadAccounts();
+  if (accounts[e]) return { ok: false, error: 'An account with this email already exists. Log in instead.' };
+
+  const data = emptyData();
+  data.business = {
+    ...data.business,
+    ...initial,
+    email: e,
+    accountEmail: e,
+    accountPassword: password,
+    onboardingDone: true,
+  };
+  data.session = { loggedIn: true };
+
+  accounts[e] = {
+    email: e,
+    password,
+    createdAt: new Date().toISOString(),
+    data: { ...data, session: { loggedIn: false } },
+  };
+  saveAccounts(accounts);
+  setSessionEmail(e);
+  return { ok: true, data };
+}
+
+export function loginAccount(
+  email: string,
+  password: string,
+): { ok: true; data: AppData } | { ok: false; error: string } {
+  const e = email.trim().toLowerCase();
+  const accounts = loadAccounts();
+  const acc = accounts[e];
+  if (!acc || acc.password !== password) {
+    return {
+      ok: false,
+      error: 'Wrong email or password. Try demo@hustledesk.ke / demo123',
+    };
+  }
+  setSessionEmail(e);
+  const data = migrate(acc.data);
+  data.session = { loggedIn: true };
+  return { ok: true, data };
+}
+
+export function logoutAccount() {
+  setSessionEmail(null);
+}
+
+export function resetDemo(): AppData {
+  const demo = seedData();
+  const accounts = loadAccounts();
+  accounts['demo@hustledesk.ke'] = {
+    email: 'demo@hustledesk.ke',
+    password: 'demo123',
+    createdAt: new Date().toISOString(),
+    data: { ...demo, session: { loggedIn: false } },
+  };
+  saveAccounts(accounts);
+  setSessionEmail('demo@hustledesk.ke');
+  return { ...demo, session: { loggedIn: true } };
 }
 
 export function nextInvoiceNumber(business: BusinessProfile): string {
@@ -241,4 +484,9 @@ export function nextInvoiceNumber(business: BusinessProfile): string {
 export function nextQuoteNumber(business: BusinessProfile): string {
   const n = business.nextQuoteNumber || 1;
   return `${business.quotePrefix || 'QT'}-${String(n).padStart(4, '0')}`;
+}
+
+export function nextReceiptNumber(business: BusinessProfile): string {
+  const n = business.nextReceiptNumber || 1;
+  return `${business.receiptPrefix || 'RCT'}-${String(n).padStart(4, '0')}`;
 }

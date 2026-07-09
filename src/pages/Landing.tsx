@@ -42,13 +42,13 @@ export function Landing() {
       <section className="hero">
         <div>
           <div className="pill-row" style={{ marginBottom: '1rem' }}>
-            <span className="pill">Kenya-first · Wave meets M-Pesa · Quotes → Invoices</span>
+            <span className="pill">Kenya-first · Share links · CSV · Quotes → Invoices → Receipts</span>
           </div>
           <h1>The money desk for Kenyan SMEs who still chase payments on WhatsApp.</h1>
           <p className="hero-lead">
-            HustleDesk is what FreshBooks, Wave, and HoneyBook do for US freelancers — rebuilt for
-            Kenya: M-Pesa, KRA PIN, KES, itemized quotes, branded invoices with your logo, and
-            WhatsApp share. Look legit. Get paid. Know who owes you.
+            HustleDesk is Wave + FreshBooks + HoneyBook for Kenya: business accounts, logos,
+            itemized quotes, public share links clients open without apps, M-Pesa details, payment
+            history, receipts, expenses, tax CSV exports, and WhatsApp reminders — in one place.
           </p>
           <div className="hero-cta">
             <button type="button" className="btn btn-primary btn-lg" onClick={() => go('signup')}>
@@ -59,10 +59,10 @@ export function Landing() {
             </button>
           </div>
           <div className="pill-row">
-            <span className="pill">Logo on every PDF</span>
-            <span className="pill">Itemized qty × price</span>
-            <span className="pill">Quotations</span>
-            <span className="pill">M-Pesa Till / Paybill</span>
+            <span className="pill">Public share links</span>
+            <span className="pill">CSV for accountants</span>
+            <span className="pill">Catalog + expenses</span>
+            <span className="pill">M-Pesa + receipts</span>
           </div>
         </div>
 

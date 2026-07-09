@@ -6,6 +6,10 @@ import {
   Settings,
   CreditCard,
   LogOut,
+  Package,
+  Wallet,
+  Receipt,
+  BarChart3,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { Page } from '../types';
@@ -14,7 +18,11 @@ const links: { page: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { page: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { page: 'quotes', label: 'Quotations', icon: FileSpreadsheet },
   { page: 'invoices', label: 'Invoices', icon: FileText },
+  { page: 'receipts', label: 'Receipts', icon: Receipt },
   { page: 'clients', label: 'Clients', icon: Users },
+  { page: 'catalog', label: 'Catalog', icon: Package },
+  { page: 'expenses', label: 'Expenses', icon: Wallet },
+  { page: 'reports', label: 'Reports', icon: BarChart3 },
   { page: 'settings', label: 'Business', icon: Settings },
   { page: 'pricing', label: 'Upgrade', icon: CreditCard },
 ];
@@ -53,7 +61,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <img
                 src={data.business.logoDataUrl}
                 alt=""
-                style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain', background: '#fff', marginBottom: 6 }}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 6,
+                  objectFit: 'contain',
+                  background: '#fff',
+                  marginBottom: 6,
+                }}
               />
             ) : null}
             {data.business.name || 'Your business'}
@@ -76,7 +91,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </aside>
       <div>
         <nav className="mobile-nav">
-          <button type="button" className="brand" onClick={() => go('dashboard')} style={{ color: 'white' }}>
+          <button
+            type="button"
+            className="brand"
+            onClick={() => go('dashboard')}
+            style={{ color: 'white' }}
+          >
             <span className="brand-mark">H</span>
           </button>
           <NavButtons mobile />

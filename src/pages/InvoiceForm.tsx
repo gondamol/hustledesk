@@ -153,6 +153,7 @@ export function InvoiceForm({ mode }: { mode: 'new' | 'edit' }) {
         <LineItemsEditor
           items={invoice.items}
           currency={currency}
+          catalog={data.catalog}
           onChange={(items) => setInvoice({ ...invoice, items })}
         />
         <div className="form-grid" style={{ marginTop: '1rem' }}>

@@ -1,15 +1,38 @@
-import { Download, Pencil, Printer, MessageCircle, ArrowLeft } from 'lucide-react';
+import { useState } from 'react';
+import {
+  Download,
+  Pencil,
+  Printer,
+  MessageCircle,
+  ArrowLeft,
+  Link2,
+  Copy,
+  Bell,
+  Banknote,
+} from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { formatDate, formatMoney, invoiceTotals } from '../lib/format';
+import { daysOverdue, formatDate, formatMoney, invoiceTotals, todayISO } from '../lib/format';
 import { downloadInvoicePdf } from '../lib/pdf';
 import { StatusBadge } from '../components/StatusBadge';
+import { buildSharePayload, copyToClipboard, encodeShare, shareUrl } from '../lib/share';
 
 export function InvoiceView() {
-  const { data, nav, go, saveInvoice } = useApp();
+  const { data, nav, go, recordPayment, duplicateInvoice, canCreateInvoice } = useApp();
   const invoice = data.invoices.find((i) => i.id === nav.invoiceId);
   const client = invoice ? data.clients.find((c) => c.id === invoice.clientId) : undefined;
   const business = data.business;
   const currency = business.currency;
+
+  const [payOpen, setPayOpen] = useState(false);
+  const [pay, setPay] = useState({
+    amount: 0,
+    date: todayISO(),
+    method: 'M-Pesa',
+    reference: '',
+    note: '',
+    receipt: true,
+  });
+  const [shareMsg, setShareMsg] = useState('');
 
   if (!invoice) {
     return (
@@ -26,28 +49,70 @@ export function InvoiceView() {
 
   const totals = invoiceTotals(invoice.items, invoice.taxRate, invoice.discount);
   const balance = Math.max(0, totals.total - (invoice.amountPaid || 0));
+  const overdueDays = invoice.status !== 'paid' ? daysOverdue(invoice.dueDate) : 0;
 
   const markPaid = () => {
-    saveInvoice(
+    recordPayment(
+      invoice.id,
       {
-        ...invoice,
-        status: 'paid',
-        amountPaid: totals.total,
-        updatedAt: new Date().toISOString(),
+        amount: balance,
+        date: todayISO(),
+        method: 'M-Pesa',
+        reference: '',
+        note: 'Marked paid in full',
       },
-      false,
+      true,
     );
   };
 
-  const shareWhatsApp = () => {
+  const submitPayment = () => {
+    if (pay.amount <= 0) return alert('Enter payment amount');
+    recordPayment(
+      invoice.id,
+      {
+        amount: pay.amount,
+        date: pay.date,
+        method: pay.method,
+        reference: pay.reference,
+        note: pay.note,
+      },
+      pay.receipt,
+    );
+    setPayOpen(false);
+    setPay({ amount: 0, date: todayISO(), method: 'M-Pesa', reference: '', note: '', receipt: true });
+  };
+
+  const shareLink = async () => {
+    const token = encodeShare(
+      buildSharePayload('invoice', business, client, { invoice }),
+    );
+    const url = shareUrl(token);
+    await copyToClipboard(url);
+    setShareMsg(url);
+    alert('Shareable link copied to clipboard!\n\nAnyone with the link can view this invoice (no login).');
+  };
+
+  const shareWhatsApp = (reminder = false) => {
+    const extra = reminder
+      ? `\n\nFriendly reminder: this invoice is ${overdueDays > 0 ? `${overdueDays} day(s) overdue` : 'due soon'}. Kindly settle via M-Pesa when you can.`
+      : '';
     const text = encodeURIComponent(
-      `Habari ${client?.name || ''},\n\nPlease find invoice ${invoice.number} for ${formatMoney(totals.total, currency)}.\nDue: ${formatDate(invoice.dueDate)}.\n\n${business.mpesaTill ? `M-Pesa Till: ${business.mpesaTill}\n` : ''}${business.mpesaPaybill ? `Paybill: ${business.mpesaPaybill}\n` : ''}From: ${business.name}\n\n(I will also send the PDF.)`,
+      `Habari ${client?.name || ''},\n\nPlease find invoice ${invoice.number} for ${formatMoney(totals.total, currency)}.\nDue: ${formatDate(invoice.dueDate)}.\nBalance: ${formatMoney(balance, currency)}.\n\n${business.mpesaTill ? `M-Pesa Till: ${business.mpesaTill}\n` : ''}${business.mpesaPaybill ? `Paybill: ${business.mpesaPaybill}\n` : ''}From: ${business.name}${extra}\n\n(I can also send a share link / PDF.)`,
     );
     const phone = (client?.phone || '').replace(/[^\d]/g, '');
     const url = phone
       ? `https://wa.me/${phone.startsWith('0') ? `254${phone.slice(1)}` : phone}?text=${text}`
       : `https://wa.me/?text=${text}`;
     window.open(url, '_blank');
+  };
+
+  const onDuplicate = () => {
+    if (!canCreateInvoice) {
+      go('pricing');
+      return;
+    }
+    const copy = duplicateInvoice(invoice.id);
+    if (copy) go('invoice-edit', copy.id);
   };
 
   return (
@@ -57,7 +122,12 @@ export function InvoiceView() {
           <h1>{invoice.number}</h1>
           <p>
             <StatusBadge status={invoice.status} /> · Balance {formatMoney(balance, currency)}
-            {invoice.quoteId ? ' · From quotation' : ''}
+            {overdueDays > 0 && invoice.status !== 'paid' ? (
+              <span style={{ color: 'var(--danger)', fontWeight: 700 }}>
+                {' '}
+                · {overdueDays}d overdue
+              </span>
+            ) : null}
           </p>
         </div>
         <div className="toolbar" style={{ margin: 0 }}>
@@ -66,6 +136,9 @@ export function InvoiceView() {
           </button>
           <button type="button" className="btn btn-secondary" onClick={() => go('invoice-edit', invoice.id)}>
             <Pencil size={16} /> Edit
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={onDuplicate}>
+            <Copy size={16} /> Duplicate
           </button>
           <button
             type="button"
@@ -77,16 +150,98 @@ export function InvoiceView() {
           <button type="button" className="btn btn-secondary" onClick={() => window.print()}>
             <Printer size={16} /> Print
           </button>
-          <button type="button" className="btn btn-secondary" onClick={shareWhatsApp}>
+          <button type="button" className="btn btn-secondary" onClick={shareLink}>
+            <Link2 size={16} /> Share link
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={() => shareWhatsApp(false)}>
             <MessageCircle size={16} /> WhatsApp
           </button>
           {invoice.status !== 'paid' && (
-            <button type="button" className="btn btn-primary" onClick={markPaid}>
-              Mark paid
-            </button>
+            <>
+              <button type="button" className="btn btn-secondary" onClick={() => shareWhatsApp(true)}>
+                <Bell size={16} /> Remind
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setPay({ ...pay, amount: balance });
+                  setPayOpen(true);
+                }}
+              >
+                <Banknote size={16} /> Record payment
+              </button>
+              <button type="button" className="btn btn-primary" onClick={markPaid}>
+                Mark paid
+              </button>
+            </>
           )}
         </div>
       </div>
+
+      {shareMsg && (
+        <div className="alert alert-info no-print">
+          Share link ready (also in clipboard):
+          <div style={{ wordBreak: 'break-all', fontSize: '0.85rem', marginTop: 6 }}>{shareMsg}</div>
+        </div>
+      )}
+
+      {payOpen && (
+        <div className="card no-print" style={{ marginBottom: '1rem' }}>
+          <h3>Record payment</h3>
+          <div className="form-grid three" style={{ marginTop: '0.75rem' }}>
+            <div className="field">
+              <label>Amount</label>
+              <input
+                type="number"
+                value={pay.amount}
+                onChange={(e) => setPay({ ...pay, amount: Number(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="field">
+              <label>Date</label>
+              <input
+                type="date"
+                value={pay.date}
+                onChange={(e) => setPay({ ...pay, date: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label>Method</label>
+              <input value={pay.method} onChange={(e) => setPay({ ...pay, method: e.target.value })} />
+            </div>
+            <div className="field">
+              <label>M-Pesa / bank reference</label>
+              <input
+                value={pay.reference}
+                onChange={(e) => setPay({ ...pay, reference: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label>Note</label>
+              <input value={pay.note} onChange={(e) => setPay({ ...pay, note: e.target.value })} />
+            </div>
+            <div className="field" style={{ justifyContent: 'flex-end' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 24 }}>
+                <input
+                  type="checkbox"
+                  checked={pay.receipt}
+                  onChange={(e) => setPay({ ...pay, receipt: e.target.checked })}
+                />
+                Issue receipt
+              </label>
+            </div>
+          </div>
+          <div className="toolbar" style={{ marginBottom: 0, marginTop: '0.75rem' }}>
+            <button type="button" className="btn btn-primary" onClick={submitPayment}>
+              Save payment
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={() => setPayOpen(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="invoice-sheet">
         <div className="invoice-sheet-head">
@@ -140,12 +295,6 @@ export function InvoiceView() {
                   {client.email}
                 </>
               ) : null}
-              {client?.address ? (
-                <>
-                  <br />
-                  {client.address}
-                </>
-              ) : null}
             </div>
           </div>
           <div>
@@ -170,13 +319,14 @@ export function InvoiceView() {
                 <>
                   {business.bankName}
                   {business.bankAccount ? ` · ${business.bankAccount}` : ''}
-                  {business.bankBranch ? ` · ${business.bankBranch}` : ''}
                 </>
               )}
-              {!business.mpesaTill && !business.mpesaPaybill && !business.bankName && (
-                <>Add payment details in Business settings.</>
-              )}
             </div>
+            {business.paymentTerms && (
+              <p className="help" style={{ marginTop: 8 }}>
+                {business.paymentTerms}
+              </p>
+            )}
           </div>
         </div>
 
@@ -231,6 +381,36 @@ export function InvoiceView() {
             <span>{formatMoney(balance, currency)}</span>
           </div>
         </div>
+
+        {(invoice.payments || []).length > 0 && (
+          <div style={{ marginTop: '1.25rem' }}>
+            <div className="muted" style={{ fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase' }}>
+              Payment history
+            </div>
+            <div className="table-wrap" style={{ marginTop: 8 }}>
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Method</th>
+                    <th>Reference</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoice.payments.map((p) => (
+                    <tr key={p.id}>
+                      <td>{formatDate(p.date)}</td>
+                      <td>{p.method}</td>
+                      <td>{p.reference || p.note || '—'}</td>
+                      <td>{formatMoney(p.amount, currency)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {(invoice.notes || business.notes) && (
           <div style={{ marginTop: '1.25rem' }}>

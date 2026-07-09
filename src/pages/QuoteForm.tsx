@@ -134,6 +134,7 @@ export function QuoteForm({ mode }: { mode: 'new' | 'edit' }) {
         <LineItemsEditor
           items={quote.items}
           currency={currency}
+          catalog={data.catalog}
           onChange={(items) => setQuote({ ...quote, items })}
         />
         <div className="form-grid" style={{ marginTop: '1rem' }}>
