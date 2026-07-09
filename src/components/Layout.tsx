@@ -143,7 +143,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </button>
         <NavButtons />
       </aside>
-      <div>
+      <div className="app-content">
         <nav className="mobile-nav">
           <button
             type="button"
