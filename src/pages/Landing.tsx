@@ -1,22 +1,55 @@
+import { useState } from 'react';
 import {
   FileText,
   Smartphone,
   TrendingUp,
-  Shield,
-  Zap,
   MessageCircle,
   Image,
   FileSpreadsheet,
   ListOrdered,
+  RefreshCw,
+  Bell,
+  Building2,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { formatMoney } from '../lib/format';
+import { SALES, salesWhatsAppUrl } from '../lib/sales';
 
 export function Landing() {
-  const { go, data } = useApp();
+  const { go, data, addLead } = useApp();
+  const salesPhone = data.business.salesWhatsApp || SALES.defaultWhatsApp;
+
   const enter = () => {
     if (data.session.loggedIn) go('dashboard');
     else go('login');
+  };
+
+  const [lead, setLead] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    businessType: '',
+    message: '',
+  });
+  const [leadDone, setLeadDone] = useState(false);
+
+  const submitLead = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lead.name.trim() || !lead.phone.trim()) {
+      alert('Name and phone are required');
+      return;
+    }
+    addLead({
+      name: lead.name.trim(),
+      phone: lead.phone.trim(),
+      email: lead.email.trim(),
+      businessType: lead.businessType.trim(),
+      message: lead.message.trim(),
+      source: 'landing',
+    });
+    setLeadDone(true);
+    const waText = `Habari! I'm ${lead.name}. Business: ${lead.businessType || 'SME'}. Phone: ${lead.phone}. I want HustleDesk setup (${SALES.setupPrice}). ${lead.message}`;
+    window.open(salesWhatsAppUrl(salesPhone, waText), '_blank');
   };
 
   return (
@@ -27,6 +60,9 @@ export function Landing() {
           HustleDesk
         </button>
         <div className="nav-actions">
+          <a className="btn btn-secondary" href={salesWhatsAppUrl(salesPhone, SALES.whatsappGreeting)} target="_blank" rel="noreferrer">
+            <MessageCircle size={16} /> WhatsApp us
+          </a>
           <button type="button" className="btn btn-secondary" onClick={() => go('pricing')}>
             Pricing
           </button>
@@ -42,27 +78,34 @@ export function Landing() {
       <section className="hero">
         <div>
           <div className="pill-row" style={{ marginBottom: '1rem' }}>
-            <span className="pill">Kenya-first · Share links · CSV · Quotes → Invoices → Receipts</span>
+            <span className="pill">Kenya · M-Pesa · Recurring · Reminders · Accountants</span>
           </div>
-          <h1>The money desk for Kenyan SMEs who still chase payments on WhatsApp.</h1>
+          <h1>Get paid faster. Stop chasing invoices on WhatsApp chaos.</h1>
           <p className="hero-lead">
-            HustleDesk is Wave + FreshBooks + HoneyBook for Kenya: business accounts, logos,
-            itemized quotes, public share links clients open without apps, M-Pesa details, payment
-            history, receipts, expenses, tax CSV exports, and WhatsApp reminders — in one place.
+            Professional quotes & invoices with your logo, itemized line items, M-Pesa details,
+            recurring retainers, payment reminders, and multi-business tools for accountants —
+            built for Kenyan freelancers and SMEs.
           </p>
           <div className="hero-cta">
             <button type="button" className="btn btn-primary btn-lg" onClick={() => go('signup')}>
-              Create free business account
+              Start free — no card
             </button>
-            <button type="button" className="btn btn-secondary btn-lg" onClick={enter}>
-              Open demo
-            </button>
+            <a
+              className="btn btn-secondary btn-lg"
+              href={salesWhatsAppUrl(
+                salesPhone,
+                `I want setup help for ${SALES.setupPrice}. Please assist.`,
+              )}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <MessageCircle size={18} /> Book setup {SALES.setupPrice}
+            </a>
           </div>
           <div className="pill-row">
-            <span className="pill">Public share links</span>
-            <span className="pill">CSV for accountants</span>
-            <span className="pill">Catalog + expenses</span>
-            <span className="pill">M-Pesa + receipts</span>
+            <span className="pill">Free forever tier</span>
+            <span className="pill">Pro {SALES.proPrice}</span>
+            <span className="pill">Setup & training {SALES.setupPrice}</span>
           </div>
         </div>
 
@@ -71,29 +114,25 @@ export function Landing() {
             <div className="invoice-preview-head">
               <div>
                 <strong>Your Brand Ltd</strong>
-                <div style={{ opacity: 0.85, fontSize: '0.85rem' }}>Logo · KRA PIN · M-Pesa</div>
+                <div style={{ opacity: 0.85, fontSize: '0.85rem' }}>Logo · KRA · M-Pesa Till</div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontWeight: 700 }}>QT-0012 → INV-0042</div>
-                <div style={{ fontSize: '0.85rem', opacity: 0.9 }}>Quote won · invoice sent</div>
+                <div style={{ fontWeight: 700 }}>INV-0042</div>
+                <div style={{ fontSize: '0.85rem', opacity: 0.9 }}>Recurring · Reminder ready</div>
               </div>
             </div>
             <div className="invoice-preview-body">
               <div className="preview-row">
-                <span>Design package × 1 job</span>
-                <span>{formatMoney(45000)}</span>
-              </div>
-              <div className="preview-row">
-                <span>Print materials × 200 pcs</span>
-                <span>{formatMoney(16000)}</span>
+                <span>Monthly retainer × 1 mo</span>
+                <span>{formatMoney(25000)}</span>
               </div>
               <div className="preview-row">
                 <span>VAT 16%</span>
-                <span>{formatMoney(9760)}</span>
+                <span>{formatMoney(4000)}</span>
               </div>
               <div className="preview-row">
                 <span>Total due</span>
-                <span>{formatMoney(70760)}</span>
+                <span>{formatMoney(29000)}</span>
               </div>
             </div>
           </div>
@@ -101,132 +140,163 @@ export function Landing() {
       </section>
 
       <section className="section">
-        <h2>Real SME pain points we attack</h2>
-        <p className="section-sub">
-          US tools (FreshBooks, Wave, QuickBooks, HoneyBook, Jobber) already solved this. Kenya still
-          lives in Excel + Word + “I’ll send later.” That’s the gap.
-        </p>
+        <h2>Everything an SME needs to look legit and get paid</h2>
         <div className="grid-3">
-          <div className="card">
-            <div className="icon-wrap">
-              <Image size={20} />
+          {[
+            { icon: FileSpreadsheet, t: 'Quotes → invoices', d: 'Win the job, convert in one click.' },
+            { icon: ListOrdered, t: 'Itemized billing', d: 'Qty × unit price, VAT, discounts.' },
+            { icon: Image, t: 'Your logo & brand', d: 'PDFs clients take seriously.' },
+            { icon: Smartphone, t: 'M-Pesa first', d: 'Till & Paybill on every document.' },
+            { icon: RefreshCw, t: 'Recurring invoices', d: 'Monthly retainers auto-create.' },
+            { icon: Bell, t: 'Payment reminders', d: 'WhatsApp chase with balance & Till.' },
+            { icon: Building2, t: 'Multi-business', d: 'Accountants switch client files.' },
+            { icon: TrendingUp, t: 'Reports & CSV', d: 'Outstanding, profit, tax export.' },
+            { icon: FileText, t: 'Share links', d: 'Client opens invoice without an app.' },
+          ].map(({ icon: Icon, t, d }) => (
+            <div className="card" key={t}>
+              <div className="icon-wrap">
+                <Icon size={20} />
+              </div>
+              <h3>{t}</h3>
+              <p>{d}</p>
             </div>
-            <h3>Look unprofessional</h3>
-            <p>No logo, no letterhead → clients delay payment. Upload logo once; every PDF is on-brand.</p>
-          </div>
-          <div className="card">
-            <div className="icon-wrap">
-              <ListOrdered size={20} />
-            </div>
-            <h3>Fuzzy totals</h3>
-            <p>Shops & contractors need lines: item, unit, qty, unit price, amount. Not one vague lump sum.</p>
-          </div>
-          <div className="card">
-            <div className="icon-wrap">
-              <FileSpreadsheet size={20} />
-            </div>
-            <h3>Quotes never become invoices</h3>
-            <p>You quote on paper, then retype the invoice. HustleDesk converts quote → invoice in one click.</p>
-          </div>
-          <div className="card">
-            <div className="icon-wrap">
-              <Smartphone size={20} />
-            </div>
-            <h3>Wrong payment rails</h3>
-            <p>US tools push cards/ACH. You need Till, Paybill, bank — on the document clients already open.</p>
-          </div>
-          <div className="card">
-            <div className="icon-wrap">
-              <TrendingUp size={20} />
-            </div>
-            <h3>No cash visibility</h3>
-            <p>Outstanding vs paid vs overdue vs quote pipeline — stop guessing from WhatsApp threads.</p>
-          </div>
-          <div className="card">
-            <div className="icon-wrap">
-              <MessageCircle size={20} />
-            </div>
-            <h3>Chasing is awkward</h3>
-            <p>PDF + WhatsApp message with amount and M-Pesa details. Follow up without rewriting the bill.</p>
-          </div>
-          <div className="card">
-            <div className="icon-wrap">
-              <FileText size={20} />
-            </div>
-            <h3>Tax season panic</h3>
-            <p>KRA PIN on docs, VAT lines, payment history — cleaner trail for your accountant later.</p>
-          </div>
-          <div className="card">
-            <div className="icon-wrap">
-              <Shield size={20} />
-            </div>
-            <h3>Data trust</h3>
-            <p>Your own business account. Prototype is browser-local; cloud multi-device is the Pro SaaS path.</p>
-          </div>
-          <div className="card">
-            <div className="icon-wrap">
-              <Zap size={20} />
-            </div>
-            <h3>Too expensive / complex</h3>
-            <p>QuickBooks is overkill for a salon or plumber. Free tier + KSh 799 Pro matches local wallets.</p>
-          </div>
+          ))}
         </div>
       </section>
 
       <section className="section">
-        <h2>Inspired by the best — built for East Africa</h2>
-        <p className="section-sub">
-          FreshBooks (invoices + clients), Wave (free SME accounting entry), HoneyBook (quotes →
-          contracts → pay), Jobber (trade itemization). None of them natively feel like M-Pesa Kenya.
-        </p>
-        <div className="card">
-          <p style={{ margin: 0, color: 'var(--muted)' }}>
-            <strong>Competition note:</strong> Global tools (Zoho, QuickBooks Online, Xero) exist in Kenya but
-            are priced and designed for formal accounting teams. Local payment tools focus on collecting
-            money, not the quote→invoice→chase workflow. HustleDesk owns the “solo/SME money paperwork”
-            layer — where Excel currently wins by default.
-          </p>
-        </div>
-      </section>
-
-      <section className="section">
-        <h2>Simple pricing</h2>
-        <div className="grid-2">
+        <h2>Pricing that pays for itself</h2>
+        <div className="grid-3">
           <div className="card pricing-card">
             <h3>Free</h3>
             <div className="price">
               KSh 0 <span>/ forever</span>
             </div>
             <ul className="feature-list">
-              <li>Business account + logo</li>
-              <li>5 invoices + 5 quotes</li>
-              <li>Itemized line items</li>
-              <li>M-Pesa + PDF + WhatsApp</li>
+              <li>Quotes, invoices, clients</li>
+              <li>M-Pesa details + PDF</li>
+              <li>WhatsApp share</li>
             </ul>
             <button type="button" className="btn btn-secondary" onClick={() => go('signup')}>
-              Create free account
+              Start free
             </button>
           </div>
           <div className="card pricing-card featured">
             <h3>Pro</h3>
             <div className="price">
-              KSh 799 <span>/ month</span>
+              {SALES.proPrice} <span></span>
             </div>
             <ul className="feature-list">
-              <li>Unlimited quotes & invoices</li>
-              <li>Remove HustleDesk branding</li>
-              <li>Cloud backup (roadmap)</li>
-              <li>Priority support</li>
+              <li>Unlimited documents</li>
+              <li>Recurring + branding</li>
+              <li>Cloud when configured</li>
             </ul>
-            <button type="button" className="btn btn-primary" onClick={() => go('signup')}>
-              Start free, upgrade later
+            <button type="button" className="btn btn-primary" onClick={() => go('pricing')}>
+              See Pro
             </button>
+          </div>
+          <div className="card pricing-card">
+            <h3>Done-for-you setup</h3>
+            <div className="price">
+              {SALES.setupPrice} <span>/ once</span>
+            </div>
+            <ul className="feature-list">
+              <li>We configure your brand</li>
+              <li>First invoices + training</li>
+              <li>WhatsApp support</li>
+            </ul>
+            <a
+              className="btn btn-secondary"
+              href={salesWhatsAppUrl(salesPhone, `I want ${SALES.setupLabel} for ${SALES.setupPrice}.`)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <MessageCircle size={16} /> Book on WhatsApp
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section className="section" id="leads">
+        <h2>Get a free walkthrough</h2>
+        <p className="section-sub">
+          Leave your details — we WhatsApp you. Or message us directly for {SALES.setupPrice} setup.
+        </p>
+        <div className="grid-2">
+          <div className="card">
+            {leadDone ? (
+              <div className="alert alert-info">
+                Asante! We saved your lead and opened WhatsApp. If chat didn&apos;t open, tap the
+                button above.
+              </div>
+            ) : (
+              <form onSubmit={submitLead} className="form-grid">
+                <div className="field">
+                  <label>Your name *</label>
+                  <input
+                    value={lead.name}
+                    onChange={(e) => setLead({ ...lead, name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="field">
+                  <label>WhatsApp phone *</label>
+                  <input
+                    value={lead.phone}
+                    onChange={(e) => setLead({ ...lead, phone: e.target.value })}
+                    placeholder="07…"
+                    required
+                  />
+                </div>
+                <div className="field">
+                  <label>Email</label>
+                  <input
+                    type="email"
+                    value={lead.email}
+                    onChange={(e) => setLead({ ...lead, email: e.target.value })}
+                  />
+                </div>
+                <div className="field">
+                  <label>Business type</label>
+                  <input
+                    value={lead.businessType}
+                    onChange={(e) => setLead({ ...lead, businessType: e.target.value })}
+                    placeholder="Salon, freelancing, shop…"
+                  />
+                </div>
+                <div className="field full">
+                  <label>Message</label>
+                  <textarea
+                    value={lead.message}
+                    onChange={(e) => setLead({ ...lead, message: e.target.value })}
+                    placeholder="I need invoices for my clients…"
+                  />
+                </div>
+                <div className="field full">
+                  <button type="submit" className="btn btn-primary btn-lg" style={{ width: '100%' }}>
+                    Submit & open WhatsApp
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+          <div className="card">
+            <h3>Prefer to try yourself?</h3>
+            <p className="muted">
+              Create a free account in 60 seconds. Demo login: demo@hustledesk.ke / demo123
+            </p>
+            <button type="button" className="btn btn-secondary" onClick={enter}>
+              Open app
+            </button>
+            <p className="help" style={{ marginTop: '1rem' }}>
+              Tip: set your sales WhatsApp under Business settings so these CTAs reach your number.
+            </p>
           </div>
         </div>
       </section>
 
       <footer className="footer">
-        HustleDesk · Kenya SME money desk · Quote · Invoice · Get paid
+        HustleDesk · Made for Kenya hustlers · Quotes · Invoices · Get paid
       </footer>
     </div>
   );

@@ -10,6 +10,10 @@ import {
   Wallet,
   Receipt,
   BarChart3,
+  RefreshCw,
+  Bell,
+  Building2,
+  UserPlus,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { Page } from '../types';
@@ -18,11 +22,15 @@ const links: { page: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { page: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { page: 'quotes', label: 'Quotations', icon: FileSpreadsheet },
   { page: 'invoices', label: 'Invoices', icon: FileText },
+  { page: 'recurring', label: 'Recurring', icon: RefreshCw },
+  { page: 'reminders', label: 'Reminders', icon: Bell },
   { page: 'receipts', label: 'Receipts', icon: Receipt },
   { page: 'clients', label: 'Clients', icon: Users },
   { page: 'catalog', label: 'Catalog', icon: Package },
   { page: 'expenses', label: 'Expenses', icon: Wallet },
   { page: 'reports', label: 'Reports', icon: BarChart3 },
+  { page: 'workspaces', label: 'Businesses', icon: Building2 },
+  { page: 'leads', label: 'Leads', icon: UserPlus },
   { page: 'settings', label: 'Business', icon: Settings },
   { page: 'pricing', label: 'Upgrade', icon: CreditCard },
 ];
@@ -34,7 +42,18 @@ function isActive(current: Page, page: Page) {
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const { nav, go, data, logout, cloudMode, cloudSyncing, cloudUser } = useApp();
+  const {
+    nav,
+    go,
+    data,
+    logout,
+    cloudMode,
+    cloudSyncing,
+    cloudUser,
+    switchWorkspace,
+  } = useApp();
+
+  const workspaces = data.workspaces || [];
 
   const NavButtons = ({ mobile = false }: { mobile?: boolean }) => (
     <>
@@ -52,6 +71,31 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {!mobile && (
         <>
           <div className="side-spacer" />
+          {workspaces.length > 1 && (
+            <div style={{ padding: '0.5rem 0.75rem' }}>
+              <label className="help" style={{ display: 'block', marginBottom: 4, color: '#8fb5ae' }}>
+                Switch business
+              </label>
+              <select
+                value={data.activeWorkspaceId}
+                onChange={(e) => switchWorkspace(e.target.value)}
+                style={{
+                  width: '100%',
+                  borderRadius: 8,
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  background: 'rgba(0,0,0,0.2)',
+                  color: '#e7f5f2',
+                  padding: '0.45rem',
+                }}
+              >
+                {workspaces.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name || w.business.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <button type="button" className="side-link" onClick={logout}>
             <LogOut size={18} />
             Log out

@@ -19,6 +19,10 @@ import { Reports } from './pages/Reports';
 import { Receipts } from './pages/Receipts';
 import { SharePublic } from './pages/SharePublic';
 import { ShortShare } from './pages/ShortShare';
+import { Recurring } from './pages/Recurring';
+import { Reminders } from './pages/Reminders';
+import { Leads } from './pages/Leads';
+import { Workspaces } from './pages/Workspaces';
 import type { Page } from './types';
 
 const APP_PAGES: Page[] = [
@@ -36,6 +40,10 @@ const APP_PAGES: Page[] = [
   'expenses',
   'receipts',
   'reports',
+  'recurring',
+  'reminders',
+  'leads',
+  'workspaces',
   'settings',
   'pricing',
 ];
@@ -109,6 +117,18 @@ function AppShell() {
       break;
     case 'reports':
       body = <Reports />;
+      break;
+    case 'recurring':
+      body = <Recurring />;
+      break;
+    case 'reminders':
+      body = <Reminders />;
+      break;
+    case 'leads':
+      body = <Leads />;
+      break;
+    case 'workspaces':
+      body = <Workspaces />;
       break;
     case 'settings':
       body = <Settings />;

@@ -9,6 +9,8 @@ export type ExpenseCategory =
   | 'utilities'
   | 'tax'
   | 'other';
+export type RecurrenceFrequency = 'weekly' | 'monthly' | 'quarterly';
+export type LeadStatus = 'new' | 'contacted' | 'won' | 'lost';
 
 export interface BusinessProfile {
   name: string;
@@ -38,9 +40,12 @@ export interface BusinessProfile {
   accountEmail: string;
   accountPassword: string;
   onboardingDone: boolean;
-  /** Shown on public share pages */
   brandColor: string;
   paymentTerms: string;
+  /** Sales WhatsApp for landing CTAs (owner/agent) */
+  salesWhatsApp: string;
+  /** Accountant / multi-client mode */
+  isAccountant: boolean;
 }
 
 export interface Client {
@@ -62,7 +67,6 @@ export interface LineItem {
   unitPrice: number;
 }
 
-/** Saved products/services for quick insert */
 export interface CatalogItem {
   id: string;
   name: string;
@@ -97,6 +101,7 @@ export interface Invoice {
   payments: PaymentRecord[];
   quoteId?: string;
   shareId?: string;
+  recurringId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -141,6 +146,58 @@ export interface Receipt {
   createdAt: string;
 }
 
+export interface RecurringTemplate {
+  id: string;
+  name: string;
+  clientId: string;
+  frequency: RecurrenceFrequency;
+  nextRun: string;
+  dueDays: number;
+  items: LineItem[];
+  taxRate: number;
+  discount: number;
+  notes: string;
+  active: boolean;
+  lastRunAt?: string;
+  createdAt: string;
+}
+
+export interface ReminderLog {
+  id: string;
+  invoiceId: string;
+  sentAt: string;
+  channel: 'whatsapp' | 'note';
+  message: string;
+}
+
+export interface Lead {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  businessType: string;
+  message: string;
+  source: string;
+  status: LeadStatus;
+  createdAt: string;
+}
+
+/** Full business file for accountant multi-client switcher */
+export interface WorkspaceSnapshot {
+  id: string;
+  name: string;
+  business: BusinessProfile;
+  clients: Client[];
+  invoices: Invoice[];
+  quotes: Quote[];
+  catalog: CatalogItem[];
+  expenses: Expense[];
+  receipts: Receipt[];
+  recurring: RecurringTemplate[];
+  reminders: ReminderLog[];
+  updatedAt: string;
+}
+
 export interface AppData {
   business: BusinessProfile;
   clients: Client[];
@@ -149,12 +206,16 @@ export interface AppData {
   catalog: CatalogItem[];
   expenses: Expense[];
   receipts: Receipt[];
+  recurring: RecurringTemplate[];
+  reminders: ReminderLog[];
+  workspaces: WorkspaceSnapshot[];
+  activeWorkspaceId: string;
+  leads: Lead[];
   session: {
     loggedIn: boolean;
   };
 }
 
-/** Public share payload (no secrets) — encoded into URL */
 export interface SharePayload {
   v: 1;
   kind: 'invoice' | 'quote' | 'receipt';
@@ -203,5 +264,9 @@ export type Page =
   | 'expenses'
   | 'receipts'
   | 'reports'
+  | 'recurring'
+  | 'reminders'
+  | 'leads'
+  | 'workspaces'
   | 'settings'
   | 'pricing';

@@ -198,6 +198,25 @@ export function Settings() {
               <option value="EUR">EUR</option>
             </select>
           </div>
+          <div className="field">
+            <label>Sales WhatsApp (landing CTAs)</label>
+            <input
+              value={form.salesWhatsApp || ''}
+              onChange={(e) => set('salesWhatsApp', e.target.value)}
+              placeholder="2547…"
+            />
+            <span className="help">Used for “Book setup” buttons on the marketing page.</span>
+          </div>
+          <div className="field">
+            <label>Accountant multi-business mode</label>
+            <select
+              value={form.isAccountant ? '1' : '0'}
+              onChange={(e) => set('isAccountant', e.target.value === '1')}
+            >
+              <option value="0">Off — single business</option>
+              <option value="1">On — manage client businesses</option>
+            </select>
+          </div>
         </div>
       </div>
 

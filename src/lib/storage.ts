@@ -51,6 +51,8 @@ export function defaultBusiness(): BusinessProfile {
   onboardingDone: false,
   brandColor: '#0f766e',
   paymentTerms: 'Payment due within 7 days of invoice date.',
+  salesWhatsApp: '',
+  isAccountant: false,
   };
 }
 
@@ -74,6 +76,11 @@ function emptyData(): AppData {
     catalog: [],
     expenses: [],
     receipts: [],
+    recurring: [],
+    reminders: [],
+    workspaces: [],
+    activeWorkspaceId: '',
+    leads: [],
     session: { loggedIn: false },
   };
 }
@@ -277,6 +284,34 @@ function seedData(): AppData {
       },
     ],
     receipts: [],
+    recurring: [
+      {
+        id: uid('rec'),
+        name: 'TechStart monthly maintenance',
+        clientId: clientB.id,
+        frequency: 'monthly',
+        nextRun: todayISO(),
+        dueDays: 7,
+        items: [
+          {
+            id: uid('li'),
+            description: 'Website maintenance retainer',
+            unit: 'mo',
+            quantity: 1,
+            unitPrice: 18000,
+          },
+        ],
+        taxRate: 16,
+        discount: 0,
+        notes: 'Monthly retainer — auto-generated.',
+        active: true,
+        createdAt: new Date().toISOString(),
+      },
+    ],
+    reminders: [],
+    workspaces: [],
+    activeWorkspaceId: '',
+    leads: [],
     session: { loggedIn: false },
   };
 }
@@ -288,6 +323,8 @@ function migrate(raw: unknown): AppData {
   if (!business.nextReceiptNumber) business.nextReceiptNumber = 1;
   if (!business.brandColor) business.brandColor = '#0f766e';
   if (!business.paymentTerms) business.paymentTerms = defaultBusiness().paymentTerms;
+  if (business.salesWhatsApp === undefined) business.salesWhatsApp = '';
+  if (business.isAccountant === undefined) business.isAccountant = false;
 
   return {
     business,
@@ -297,6 +334,11 @@ function migrate(raw: unknown): AppData {
     catalog: d.catalog || [],
     expenses: d.expenses || [],
     receipts: d.receipts || [],
+    recurring: d.recurring || [],
+    reminders: d.reminders || [],
+    workspaces: d.workspaces || [],
+    activeWorkspaceId: d.activeWorkspaceId || '',
+    leads: d.leads || [],
     session: d.session || { loggedIn: false },
   };
 }

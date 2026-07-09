@@ -77,8 +77,19 @@ export function Dashboard() {
       </div>
       {stats.overdueCount > 0 && (
         <div className="alert alert-warn">
-          You have <strong>{stats.overdueCount}</strong> overdue invoice(s). Open each → <strong>Remind</strong> on
-          WhatsApp or send a <strong>Share link</strong>.
+          You have <strong>{stats.overdueCount}</strong> overdue invoice(s).{' '}
+          <button type="button" className="btn btn-sm btn-primary" onClick={() => go('reminders')}>
+            Open reminders
+          </button>
+        </div>
+      )}
+      {stats.dueRecurring > 0 && (
+        <div className="alert alert-info">
+          <strong>{stats.dueRecurring}</strong> recurring schedule(s) due — invoices may have
+          auto-generated.{' '}
+          <button type="button" className="btn btn-sm btn-secondary" onClick={() => go('recurring')}>
+            Manage recurring
+          </button>
         </div>
       )}
 

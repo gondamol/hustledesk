@@ -15,10 +15,13 @@ import type {
   Client,
   Expense,
   Invoice,
+  Lead,
   Page,
   PaymentRecord,
   Quote,
   Receipt,
+  RecurringTemplate,
+  ReminderLog,
 } from '../types';
 import {
   createAccount,
@@ -46,6 +49,13 @@ import {
   cloudSignUp,
   getSupabase,
 } from '../lib/supabase';
+import { runDueRecurring } from '../lib/recurring';
+import {
+  applySnapshot,
+  emptyWorkspaceData,
+  ensureWorkspaces,
+  snapshotFromData,
+} from '../lib/workspaces';
 import type { User } from '@supabase/supabase-js';
 
 interface NavState {
@@ -98,6 +108,17 @@ interface AppContextValue {
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshSubscription: () => Promise<void>;
+  saveRecurring: (t: RecurringTemplate, isNew: boolean) => void;
+  deleteRecurring: (id: string) => void;
+  processRecurringNow: () => number;
+  logReminder: (log: Omit<ReminderLog, 'id' | 'sentAt'>) => void;
+  addLead: (lead: Omit<Lead, 'id' | 'createdAt' | 'status'>) => Lead;
+  updateLead: (id: string, patch: Partial<Lead>) => void;
+  deleteLead: (id: string) => void;
+  switchWorkspace: (id: string) => void;
+  createWorkspace: (name: string) => void;
+  renameWorkspace: (id: string, name: string) => void;
+  deleteWorkspace: (id: string) => void;
   stats: {
     outstanding: number;
     paidThisMonth: number;
@@ -108,6 +129,7 @@ interface AppContextValue {
     quotePipeline: number;
     expensesThisMonth: number;
     profitThisMonth: number;
+    dueRecurring: number;
   };
   freeInvoiceLimit: number;
   freeQuoteLimit: number;
@@ -121,7 +143,7 @@ const FREE_INVOICE_LIMIT = 8;
 const FREE_QUOTE_LIMIT = 8;
 
 function emptyWorkspace(partial?: Partial<BusinessProfile>): AppData {
-  return {
+  return ensureWorkspaces({
     business: { ...defaultBusiness(), ...partial },
     clients: [],
     invoices: [],
@@ -129,23 +151,50 @@ function emptyWorkspace(partial?: Partial<BusinessProfile>): AppData {
     catalog: [],
     expenses: [],
     receipts: [],
+    recurring: [],
+    reminders: [],
+    workspaces: [],
+    activeWorkspaceId: '',
+    leads: [],
     session: { loggedIn: true },
-  };
+  });
 }
 
 function normalizeLoaded(raw: AppData): AppData {
-  return {
+  return ensureWorkspaces({
     ...raw,
     catalog: raw.catalog || [],
     expenses: raw.expenses || [],
     receipts: raw.receipts || [],
+    recurring: raw.recurring || [],
+    reminders: raw.reminders || [],
+    workspaces: raw.workspaces || [],
+    activeWorkspaceId: raw.activeWorkspaceId || '',
+    leads: raw.leads || [],
     invoices: (raw.invoices || []).map((i) => ({ ...i, payments: i.payments || [] })),
     session: { loggedIn: true },
-  };
+  });
+}
+
+function mergePublicLeads(d: AppData): AppData {
+  try {
+    const key = 'hustledesk_public_leads_v1';
+    const pub = JSON.parse(localStorage.getItem(key) || '[]') as Lead[];
+    if (!pub.length) return d;
+    const existing = new Set((d.leads || []).map((l) => l.id));
+    const extra = pub.filter((l) => !existing.has(l.id));
+    if (!extra.length) return d;
+    return { ...d, leads: [...extra, ...(d.leads || [])] };
+  } catch {
+    return d;
+  }
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<AppData>(() => loadData());
+  const [data, setData] = useState<AppData>(() =>
+    mergePublicLeads(ensureWorkspaces(loadData())),
+  );
+  const recurringRan = useRef(false);
   const [nav, setNav] = useState<NavState>({ page: 'landing' });
   const [cloudUser, setCloudUser] = useState<User | null>(null);
   const [cloudSyncing, setCloudSyncing] = useState(false);
@@ -209,6 +258,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })();
     return () => unsub?.();
   }, [cloudMode]);
+
+  // Auto-run due recurring invoices once per session when logged in
+  useEffect(() => {
+    if (!data.session.loggedIn || recurringRan.current) return;
+    recurringRan.current = true;
+    setData((d) => {
+      const { invoices, templates } = runDueRecurring(d.recurring || [], d.business);
+      if (!invoices.length) return d;
+      return {
+        ...d,
+        invoices: [...invoices, ...d.invoices],
+        recurring: templates,
+        business: {
+          ...d.business,
+          nextInvoiceNumber: (d.business.nextInvoiceNumber || 1) + invoices.length,
+        },
+      };
+    });
+  }, [data.session.loggedIn]);
 
   // Local multi-account persist
   useEffect(() => {
@@ -648,8 +716,139 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const resetDemoData = useCallback(() => {
     setCloudUser(null);
-    setData(resetDemo());
+    recurringRan.current = false;
+    setData(ensureWorkspaces(resetDemo()));
     setNav({ page: 'dashboard' });
+  }, []);
+
+  const saveRecurring = useCallback((t: RecurringTemplate, isNew: boolean) => {
+    setData((d) => ({
+      ...d,
+      recurring: isNew
+        ? [t, ...(d.recurring || [])]
+        : (d.recurring || []).map((x) => (x.id === t.id ? t : x)),
+    }));
+  }, []);
+
+  const deleteRecurring = useCallback((id: string) => {
+    setData((d) => ({ ...d, recurring: (d.recurring || []).filter((x) => x.id !== id) }));
+  }, []);
+
+  const processRecurringNow = useCallback(() => {
+    let count = 0;
+    setData((d) => {
+      const { invoices, templates } = runDueRecurring(d.recurring || [], d.business, 12);
+      count = invoices.length;
+      if (!invoices.length) return d;
+      return {
+        ...d,
+        invoices: [...invoices, ...d.invoices],
+        recurring: templates,
+        business: {
+          ...d.business,
+          nextInvoiceNumber: (d.business.nextInvoiceNumber || 1) + invoices.length,
+        },
+      };
+    });
+    return count;
+  }, []);
+
+  const logReminder = useCallback((log: Omit<ReminderLog, 'id' | 'sentAt'>) => {
+    const full: ReminderLog = {
+      ...log,
+      id: uid('rem'),
+      sentAt: new Date().toISOString(),
+    };
+    setData((d) => ({ ...d, reminders: [full, ...(d.reminders || [])] }));
+  }, []);
+
+  const addLead = useCallback((lead: Omit<Lead, 'id' | 'createdAt' | 'status'>) => {
+    const full: Lead = {
+      ...lead,
+      id: uid('lead'),
+      status: 'new',
+      createdAt: new Date().toISOString(),
+    };
+    setData((d) => ({ ...d, leads: [full, ...(d.leads || [])] }));
+    // also persist publicly for landing without full session
+    try {
+      const key = 'hustledesk_public_leads_v1';
+      const prev = JSON.parse(localStorage.getItem(key) || '[]') as Lead[];
+      localStorage.setItem(key, JSON.stringify([full, ...prev].slice(0, 200)));
+    } catch {
+      /* ignore */
+    }
+    return full;
+  }, []);
+
+  const updateLead = useCallback((id: string, patch: Partial<Lead>) => {
+    setData((d) => ({
+      ...d,
+      leads: (d.leads || []).map((l) => (l.id === id ? { ...l, ...patch } : l)),
+    }));
+  }, []);
+
+  const deleteLead = useCallback((id: string) => {
+    setData((d) => ({ ...d, leads: (d.leads || []).filter((l) => l.id !== id) }));
+  }, []);
+
+  const switchWorkspace = useCallback((id: string) => {
+    setData((d) => {
+      const ensured = ensureWorkspaces(d);
+      const current = snapshotFromData(ensured, ensured.activeWorkspaceId);
+      const list = ensured.workspaces.map((w) =>
+        w.id === current.id ? current : w,
+      );
+      // ensure current is in list
+      if (!list.find((w) => w.id === current.id)) list.unshift(current);
+      const target = list.find((w) => w.id === id);
+      if (!target) return d;
+      return applySnapshot({ ...ensured, workspaces: list }, target);
+    });
+  }, []);
+
+  const createWorkspace = useCallback((name: string) => {
+    setData((d) => {
+      const ensured = ensureWorkspaces(d);
+      const current = snapshotFromData(ensured, ensured.activeWorkspaceId);
+      const list = ensured.workspaces.map((w) => (w.id === current.id ? current : w));
+      if (!list.find((w) => w.id === current.id)) list.unshift(current);
+      const snap = emptyWorkspaceData(
+        name.trim() || 'New client business',
+        ensured.business.accountEmail || ensured.business.email,
+      );
+      snap.business.isAccountant = true;
+      return applySnapshot(
+        {
+          ...ensured,
+          workspaces: [snap, ...list],
+          business: { ...ensured.business, isAccountant: true },
+        },
+        snap,
+      );
+    });
+  }, []);
+
+  const renameWorkspace = useCallback((id: string, name: string) => {
+    setData((d) => ({
+      ...d,
+      workspaces: (d.workspaces || []).map((w) =>
+        w.id === id ? { ...w, name, business: { ...w.business, name } } : w,
+      ),
+      business:
+        d.activeWorkspaceId === id ? { ...d.business, name } : d.business,
+    }));
+  }, []);
+
+  const deleteWorkspace = useCallback((id: string) => {
+    setData((d) => {
+      const list = (d.workspaces || []).filter((w) => w.id !== id);
+      if (!list.length) return d;
+      if (d.activeWorkspaceId === id) {
+        return applySnapshot({ ...d, workspaces: list }, list[0]);
+      }
+      return { ...d, workspaces: list };
+    });
   }, []);
 
   const stats = useMemo(() => {
@@ -690,6 +889,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (d.getMonth() === month && d.getFullYear() === year) expensesThisMonth += e.amount;
     }
 
+    const today = todayISO();
+    const dueRecurring = (data.recurring || []).filter(
+      (r) => r.active && r.nextRun <= today,
+    ).length;
+
     return {
       outstanding,
       paidThisMonth,
@@ -700,6 +904,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       quotePipeline,
       expensesThisMonth,
       profitThisMonth: paidThisMonth - expensesThisMonth,
+      dueRecurring,
     };
   }, [data]);
 
@@ -741,6 +946,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     refreshSubscription,
+    saveRecurring,
+    deleteRecurring,
+    processRecurringNow,
+    logReminder,
+    addLead,
+    updateLead,
+    deleteLead,
+    switchWorkspace,
+    createWorkspace,
+    renameWorkspace,
+    deleteWorkspace,
     stats,
     freeInvoiceLimit: FREE_INVOICE_LIMIT,
     freeQuoteLimit: FREE_QUOTE_LIMIT,
