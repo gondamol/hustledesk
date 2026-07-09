@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { handleOptions, setCors } from '../_lib/cors';
-import { getSupabaseAdmin, isSupabaseConfigured } from '../_lib/supabaseAdmin';
-import { shortId } from '../_lib/ids';
+import { handleOptions, setCors } from '../_lib/cors.js';
+import { getSupabaseAdmin, isSupabaseConfigured } from '../_lib/supabaseAdmin.js';
+import { shortId } from '../_lib/ids.js';
 
 /**
  * POST /api/shares/create

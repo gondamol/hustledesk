@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { handleOptions, setCors } from '../_lib/cors';
-import { getSupabaseAdmin, isSupabaseConfigured } from '../_lib/supabaseAdmin';
-import { invoiceEmailHtml, isEmailConfigured, sendEmail } from '../_lib/email';
+import { handleOptions, setCors } from '../_lib/cors.js';
+import { getSupabaseAdmin, isSupabaseConfigured } from '../_lib/supabaseAdmin.js';
+import { invoiceEmailHtml, isEmailConfigured, sendEmail } from '../_lib/email.js';
 
 /**
  * POST /api/email/send

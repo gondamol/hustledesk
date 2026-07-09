@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getSupabaseAdmin, isSupabaseConfigured } from '../_lib/supabaseAdmin';
+import { getSupabaseAdmin, isSupabaseConfigured } from '../_lib/supabaseAdmin.js';
 
 /**
  * POST /api/mpesa/callback

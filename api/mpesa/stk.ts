@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { handleOptions, setCors } from '../_lib/cors';
-import { getSupabaseAdmin, isSupabaseConfigured } from '../_lib/supabaseAdmin';
-import { isMpesaConfigured, stkPush } from '../_lib/mpesa';
+import { handleOptions, setCors } from '../_lib/cors.js';
+import { getSupabaseAdmin, isSupabaseConfigured } from '../_lib/supabaseAdmin.js';
+import { isMpesaConfigured, stkPush } from '../_lib/mpesa.js';
 
 const PRO_AMOUNT = Number(process.env.PRO_PRICE_KES || 799);
 
