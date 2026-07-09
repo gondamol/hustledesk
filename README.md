@@ -7,7 +7,8 @@ Quotes → invoices → short share links → M-Pesa → receipts → email → 
 |--|--|
 | **Live** | https://hustledesk-khaki.vercel.app |
 | **GitHub** | https://github.com/gondamol/hustledesk |
-| **Cloud setup** | [docs/CLOUD_SETUP.md](docs/CLOUD_SETUP.md) |
+| **Finish setup (do this next)** | [docs/FINISH_SETUP.md](docs/FINISH_SETUP.md) |
+| **Cloud technical notes** | [docs/CLOUD_SETUP.md](docs/CLOUD_SETUP.md) |
 
 ## Features
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Save, RotateCcw, ImagePlus, Download, Upload } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { fileToLogoDataUrl, todayISO } from '../lib/format';
@@ -10,12 +10,26 @@ import {
   quotesToCsv,
 } from '../lib/csv';
 import type { BusinessProfile } from '../types';
+import { isCloudEnabled } from '../lib/config';
 
 export function Settings() {
-  const { data, updateBusiness, resetDemoData, exportBackup, importBackup } = useApp();
+  const { data, updateBusiness, resetDemoData, exportBackup, importBackup, cloudMode, cloudUser, cloudSyncing } =
+    useApp();
   const [form, setForm] = useState<BusinessProfile>(data.business);
   const [saved, setSaved] = useState(false);
   const [logoError, setLogoError] = useState('');
+  const [apiFeatures, setApiFeatures] = useState<{
+    supabase: boolean;
+    mpesa: boolean;
+    email: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/health')
+      .then((r) => r.json())
+      .then((d) => setApiFeatures(d.features || null))
+      .catch(() => setApiFeatures(null));
+  }, []);
 
   const set = <K extends keyof BusinessProfile>(key: K, value: BusinessProfile[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -61,6 +75,30 @@ export function Settings() {
       </div>
 
       {saved && <div className="alert alert-info">Settings saved.</div>}
+
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <h3>Cloud & billing setup status</h3>
+        <p className="muted">
+          Frontend cloud mode: <strong>{cloudMode || isCloudEnabled() ? 'ON' : 'OFF'}</strong>
+          {cloudUser ? ` · signed in as ${cloudUser.email}` : ' · not signed into cloud'}
+          {cloudSyncing ? ' · syncing…' : ''}
+        </p>
+        <ul className="feature-list" style={{ marginTop: '0.5rem' }}>
+          <li>
+            Supabase API: {apiFeatures == null ? 'checking…' : apiFeatures.supabase ? 'configured' : 'not set'}
+          </li>
+          <li>
+            Email (Resend): {apiFeatures == null ? 'checking…' : apiFeatures.email ? 'configured' : 'not set'}
+          </li>
+          <li>
+            M-Pesa STK: {apiFeatures == null ? 'checking…' : apiFeatures.mpesa ? 'configured' : 'not set'}
+          </li>
+        </ul>
+        <p className="help">
+          Finish cloud setup with the step-by-step guide in the repo:{' '}
+          <code>docs/FINISH_SETUP.md</code> (also on GitHub). Until then, local demo mode still works.
+        </p>
+      </div>
 
       <div className="card" style={{ marginBottom: '1rem' }}>
         <h3>Business logo & brand</h3>
