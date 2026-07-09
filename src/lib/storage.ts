@@ -7,6 +7,7 @@ import type {
   Quote,
 } from '../types';
 import { addDaysISO, todayISO, uid } from './format';
+import { DEFAULT_THEME, themeFromPrimary } from './theme';
 
 const DATA_KEY = 'hustledesk_v3';
 const ACCOUNTS_KEY = 'hustledesk_accounts_v1';
@@ -49,7 +50,8 @@ export function defaultBusiness(): BusinessProfile {
   accountEmail: '',
   accountPassword: '',
   onboardingDone: false,
-  brandColor: '#0f766e',
+  brandColor: DEFAULT_THEME.primary,
+  theme: { ...DEFAULT_THEME },
   paymentTerms: 'Payment due within 7 days of invoice date.',
   salesWhatsApp: '',
   isAccountant: false,
@@ -325,6 +327,10 @@ function migrate(raw: unknown): AppData {
   if (!business.paymentTerms) business.paymentTerms = defaultBusiness().paymentTerms;
   if (business.salesWhatsApp === undefined) business.salesWhatsApp = '';
   if (business.isAccountant === undefined) business.isAccountant = false;
+  if (!business.theme?.primary) {
+    business.theme = themeFromPrimary(business.brandColor || DEFAULT_THEME.primary);
+  }
+  if (!business.brandColor) business.brandColor = business.theme.primary;
 
   return {
     business,

@@ -21,6 +21,21 @@ Do them when you have ~30–45 minutes. Order matters: **Supabase → Vercel env
 | D. Resend email (optional same day) | Email invoices to clients | ☐ |
 | E. M-Pesa Daraja (optional) | Real Pro STK payments | ☐ |
 | F. Custom domain (optional) | Your brand URL | ☐ |
+| G. AI brand themes (optional) | Grok/OpenAI palette in Brand studio | ☐ |
+
+### G. AI themes (optional)
+
+Brand studio works **offline** (logo colour extract + smart presets).
+
+For real AI design suggestions, add to Vercel:
+
+```
+XAI_API_KEY=xai-...
+# or
+OPENAI_API_KEY=sk-...
+```
+
+Then redeploy. Open app → **Brand studio** → describe your brand → **Generate theme**.
 
 Check progress anytime:
 

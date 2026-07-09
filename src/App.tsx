@@ -23,6 +23,8 @@ import { Recurring } from './pages/Recurring';
 import { Reminders } from './pages/Reminders';
 import { Leads } from './pages/Leads';
 import { Workspaces } from './pages/Workspaces';
+import { BrandStudio } from './pages/BrandStudio';
+import { ThemeApplier } from './components/ThemeApplier';
 import type { Page } from './types';
 
 const APP_PAGES: Page[] = [
@@ -44,6 +46,7 @@ const APP_PAGES: Page[] = [
   'reminders',
   'leads',
   'workspaces',
+  'brand',
   'settings',
   'pricing',
 ];
@@ -130,6 +133,9 @@ function AppShell() {
     case 'workspaces':
       body = <Workspaces />;
       break;
+    case 'brand':
+      body = <BrandStudio />;
+      break;
     case 'settings':
       body = <Settings />;
       break;
@@ -147,6 +153,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AppProvider>
+        <ThemeApplier />
         <Routes>
           <Route path="/s/:id" element={<ShortShare />} />
           <Route path="/share/:token" element={<SharePublic />} />

@@ -13,8 +13,17 @@ import type { BusinessProfile } from '../types';
 import { isCloudEnabled } from '../lib/config';
 
 export function Settings() {
-  const { data, updateBusiness, resetDemoData, exportBackup, importBackup, cloudMode, cloudUser, cloudSyncing } =
-    useApp();
+  const {
+    data,
+    updateBusiness,
+    resetDemoData,
+    exportBackup,
+    importBackup,
+    cloudMode,
+    cloudUser,
+    cloudSyncing,
+    go,
+  } = useApp();
   const [form, setForm] = useState<BusinessProfile>(data.business);
   const [saved, setSaved] = useState(false);
   const [logoError, setLogoError] = useState('');
@@ -138,12 +147,37 @@ export function Settings() {
         </div>
         <div className="form-grid" style={{ marginTop: '1rem' }}>
           <div className="field">
-            <label>Brand colour</label>
+            <label>Primary brand colour</label>
             <input
               type="color"
-              value={form.brandColor || '#0f766e'}
-              onChange={(e) => set('brandColor', e.target.value)}
+              value={form.brandColor || form.theme?.primary || '#0f766e'}
+              onChange={(e) => {
+                const primary = e.target.value;
+                set('brandColor', primary);
+                set('theme', {
+                  ...(form.theme || {
+                    primary,
+                    primaryDark: primary,
+                    primarySoft: '#ccfbf1',
+                    accent: '#f59e0b',
+                    background: '#f4f7f6',
+                    surface: '#ffffff',
+                    text: '#0f1f1c',
+                    muted: '#5b6e69',
+                    border: '#d7e3df',
+                    font: 'system' as const,
+                    radius: '14px',
+                  }),
+                  primary,
+                });
+              }}
             />
+            <span className="help">
+              For full themes (AI + logo + fonts), open{' '}
+              <button type="button" className="btn btn-sm btn-secondary" onClick={() => go('brand')}>
+                Brand studio
+              </button>
+            </span>
           </div>
           <div className="field full">
             <label>Default payment terms</label>

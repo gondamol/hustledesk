@@ -12,6 +12,22 @@ export type ExpenseCategory =
 export type RecurrenceFrequency = 'weekly' | 'monthly' | 'quarterly';
 export type LeadStatus = 'new' | 'contacted' | 'won' | 'lost';
 
+/** Full company brand kit — drives app UI + documents */
+export interface BrandTheme {
+  primary: string;
+  primaryDark: string;
+  primarySoft: string;
+  accent: string;
+  background: string;
+  surface: string;
+  text: string;
+  muted: string;
+  border: string;
+  /** system | serif | rounded */
+  font: 'system' | 'serif' | 'rounded';
+  radius: string;
+}
+
 export interface BusinessProfile {
   name: string;
   owner: string;
@@ -40,7 +56,10 @@ export interface BusinessProfile {
   accountEmail: string;
   accountPassword: string;
   onboardingDone: boolean;
+  /** Legacy single colour — kept in sync with theme.primary */
   brandColor: string;
+  /** Full theme customization */
+  theme: BrandTheme;
   paymentTerms: string;
   /** Sales WhatsApp for landing CTAs (owner/agent) */
   salesWhatsApp: string;
@@ -268,5 +287,6 @@ export type Page =
   | 'reminders'
   | 'leads'
   | 'workspaces'
+  | 'brand'
   | 'settings'
   | 'pricing';

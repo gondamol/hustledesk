@@ -2,8 +2,15 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { BusinessProfile, Client, Invoice, Quote } from '../types';
 import { formatDate, formatMoney, invoiceTotals } from './format';
+import { hexToRgb, normalizeTheme } from './theme';
 
 type DocKind = 'INVOICE' | 'QUOTATION';
+
+function brandRgb(business: BusinessProfile): [number, number, number] {
+  const theme = normalizeTheme(business.theme, business.brandColor);
+  const rgb = hexToRgb(theme.primary);
+  return rgb ? [rgb.r, rgb.g, rgb.b] : [15, 118, 110];
+}
 
 function buildDoc(
   kind: DocKind,
@@ -24,8 +31,9 @@ function buildDoc(
   const currency = business.currency || 'KES';
   const { subtotal, discount: disc, tax, total } = invoiceTotals(items, taxRate, discount);
   const balance = amountPaid === null ? total : Math.max(0, total - (amountPaid || 0));
+  const [br, bg, bb] = brandRgb(business);
 
-  doc.setFillColor(15, 118, 110);
+  doc.setFillColor(br, bg, bb);
   doc.rect(0, 0, 210, 36, 'F');
 
   let textLeft = 14;
@@ -93,7 +101,7 @@ function buildDoc(
       formatMoney(item.quantity * item.unitPrice, currency),
     ]),
     styles: { fontSize: 9, cellPadding: 3 },
-    headStyles: { fillColor: [15, 118, 110], textColor: 255 },
+    headStyles: { fillColor: [br, bg, bb], textColor: 255 },
     columnStyles: {
       2: { halign: 'right' },
       3: { halign: 'right' },

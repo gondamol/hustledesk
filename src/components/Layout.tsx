@@ -14,6 +14,7 @@ import {
   Bell,
   Building2,
   UserPlus,
+  Palette,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { Page } from '../types';
@@ -31,6 +32,7 @@ const links: { page: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { page: 'reports', label: 'Reports', icon: BarChart3 },
   { page: 'workspaces', label: 'Businesses', icon: Building2 },
   { page: 'leads', label: 'Leads', icon: UserPlus },
+  { page: 'brand', label: 'Brand studio', icon: Palette },
   { page: 'settings', label: 'Business', icon: Settings },
   { page: 'pricing', label: 'Upgrade', icon: CreditCard },
 ];

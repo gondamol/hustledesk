@@ -38,7 +38,7 @@ export function buildSharePayload(
       bankBranch: business.bankBranch,
       currency: business.currency,
       logoDataUrl: logo,
-      brandColor: business.brandColor || '#0f766e',
+      brandColor: business.theme?.primary || business.brandColor || '#0f766e',
       paymentTerms: business.paymentTerms || '',
       plan: business.plan,
     },
