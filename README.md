@@ -1,19 +1,31 @@
 # HustleDesk
 
-**Kenya-first quotes & invoices for SMEs and freelancers.**  
-Wave / FreshBooks-style money desk — with M-Pesa, KRA PIN, logos, and WhatsApp.
+**Kenya-first money desk for SMEs & freelancers**  
+Quotes → invoices → share links → M-Pesa → receipts → reports.
 
-## Features
+Live: **https://hustledesk-khaki.vercel.app**  
+Repo: **https://github.com/gondamol/hustledesk**
 
-- **Business accounts** (signup / login) — each SME has their own workspace
-- **Logo upload** on quotes & invoices (PDF + on-screen)
-- **Itemized line items**: description, unit, quantity, unit price, amount
-- **Quotations** with validity dates → **one-click convert to invoice**
-- **Invoices** with VAT, discounts, partial payments, overdue tracking
-- **M-Pesa Till / Paybill**, bank details, KRA PIN
-- **PDF download**, print, WhatsApp share
-- Dashboard: outstanding, paid this month, quote pipeline
-- Free tier (5 quotes + 5 invoices) / Pro unlock path (KSh 799/mo)
+## Demo
+
+- Email: `demo@hustledesk.ke`
+- Password: `demo123`
+
+## Features that set us apart
+
+| Feature | Why it matters |
+|--------|----------------|
+| **Public share links** | Client opens invoice/quote in browser — no app install |
+| **Multi-business accounts** | Isolated workspaces per email on this device |
+| **Logo + brand colour** | Look legit on every PDF & share page |
+| **Itemized lines + catalog** | Qty × unit price; reuse services |
+| **Quotes → invoice** | HoneyBook-style conversion |
+| **Partial payments + receipts** | Track M-Pesa references; issue receipts |
+| **WhatsApp send + reminders** | Chase overdue politely |
+| **Expenses + profit** | Money in vs money out |
+| **CSV + JSON backup** | Accountants + disaster recovery |
+| **Reports** | VAT approx + client balances |
+| **M-Pesa / bank / KRA PIN** | Local rails, not US-only cards |
 
 ## Quick start
 
@@ -22,28 +34,24 @@ npm install
 npm run dev
 ```
 
-Demo login: `demo@hustledesk.ke` / `demo123`
+## Deploy
 
-## Build & deploy
+Pushes to `master` deploy on Vercel. Manual:
 
 ```bash
 npm run build
-# Deploy dist/ to Vercel, Netlify, or Cloudflare Pages
+vercel --prod
 ```
 
-## Monetization
+Custom domain: see [docs/CUSTOM_DOMAIN.md](docs/CUSTOM_DOMAIN.md)  
+Roadmap: see [docs/ROADMAP.md](docs/ROADMAP.md)
 
-| Offer | Price |
-|--------|--------|
-| Free | KSh 0 |
-| Pro SaaS | KSh 799/mo |
-| Setup service | KSh 1,500–5,000 |
-| Accountant white-label | KSh 3,000–10,000/mo |
+## Cloud auth (honest status)
 
-## Tech
+**Now:** multi-account email/password workspaces stored in the browser (like a strong offline Wave prototype). Share links work **globally** without login.
 
-React · TypeScript · Vite · jsPDF · localStorage (v1)
+**Next:** Supabase Auth + Postgres for true multi-device cloud (phone + laptop). Documented in roadmap.
 
 ## License
 
-Build your business on this. Keep a commercial hosted version.
+Build your business. Keep a commercial hosted version.
